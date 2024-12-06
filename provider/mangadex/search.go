@@ -2,13 +2,14 @@ package mangadex
 
 import (
 	"fmt"
+	"log"
+	"net/url"
+	"strconv"
+
 	"github.com/darylhjd/mangodex"
 	"github.com/metafates/mangal/key"
 	"github.com/metafates/mangal/source"
 	"github.com/spf13/viper"
-	"log"
-	"net/url"
-	"strconv"
 )
 
 func (m *Mangadex) Search(query string) ([]*source.Manga, error) {
@@ -34,6 +35,10 @@ func (m *Mangadex) Search(query string) ([]*source.Manga, error) {
 		params.Add("contentRating[]", mangodex.Erotica)
 	}
 
+	// Change Mangadex provider sorting to show more relevant results #204
+	// TODO: Test this to make sure it does not affect my downloads
+	// 	- params.Set("order[followedCount]", "desc")
+	//  + params.Set("order[relevance]", "desc")
 	params.Set("order[followedCount]", "desc")
 	params.Set("title", query)
 
