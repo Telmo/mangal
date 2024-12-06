@@ -2,13 +2,14 @@ package mangadex
 
 import (
 	"fmt"
+	"net/url"
+	"strconv"
+
 	"github.com/darylhjd/mangodex"
 	"github.com/metafates/mangal/key"
 	"github.com/metafates/mangal/source"
 	"github.com/spf13/viper"
 	"golang.org/x/exp/slices"
-	"net/url"
-	"strconv"
 )
 
 func (m *Mangadex) ChaptersOf(manga *source.Manga) ([]*source.Chapter, error) {
@@ -83,10 +84,6 @@ func (m *Mangadex) ChaptersOf(manga *source.Manga) ([]*source.Chapter, error) {
 			})
 		}
 		currOffset += 500
-		if currOffset >= list.Total {
-			break
-		}
-
 		if currOffset >= list.Total {
 			break
 		}
