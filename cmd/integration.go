@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/metafates/mangal/icon"
 	"github.com/metafates/mangal/integration/anilist"
@@ -69,7 +70,7 @@ See https://github.com/metafates/mangal/wiki/Anilist-Integration for more inform
 
 		if viper.GetString(key.AnilistID) == "" {
 			input := survey.Input{
-				Message: "Anilsit client ID is not set. Please enter it:",
+				Message: "Anilist client ID is not set. Please enter it:",
 				Help:    "",
 			}
 			var response string
@@ -87,7 +88,7 @@ See https://github.com/metafates/mangal/wiki/Anilist-Integration for more inform
 
 		if viper.GetString(key.AnilistSecret) == "" {
 			input := survey.Input{
-				Message: "Anilsit client secret is not set. Please enter it:",
+				Message: "Anilist client secret is not set. Please enter it:",
 				Help:    "",
 			}
 			var response string
@@ -122,7 +123,7 @@ See https://github.com/metafates/mangal/wiki/Anilist-Integration for more inform
 			}
 
 			input := survey.Input{
-				Message: "Anilsit code is not set. Please copy it from the link and paste in here:",
+				Message: "Anilist code is not set. Please copy it from the link and paste in here:",
 				Help:    "",
 			}
 
