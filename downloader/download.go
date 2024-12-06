@@ -3,6 +3,9 @@ package downloader
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/metafates/mangal/color"
 	"github.com/metafates/mangal/converter"
 	"github.com/metafates/mangal/filesystem"
@@ -12,18 +15,17 @@ import (
 	"github.com/metafates/mangal/source"
 	"github.com/metafates/mangal/style"
 	"github.com/spf13/viper"
-	"os"
-	"path/filepath"
 )
 
 // Download the chapter using given source.
 func Download(chapter *source.Chapter, progress func(string)) (string, error) {
-	log.Info("downloading " + chapter.Name)
 
 	path, err := chapter.Path(false)
 	if err != nil {
 		return "", err
 	}
+
+	log.Info("downloading " + chapter.Manga.Name + " - " + chapter.Name + " to : " + path)
 
 	if viper.GetBool(key.DownloaderRedownloadExisting) {
 		log.Info("chapter already downloaded, deleting and redownloading")
