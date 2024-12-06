@@ -163,6 +163,10 @@ func (c *Chapter) path(relativeTo string) (path string, err error) {
 }
 
 func (c *Chapter) Path(temp bool) (path string, err error) {
+	if c == nil {
+		return "", fmt.Errorf("Chapter instance is nil")
+	}
+
 	var manga string
 	manga, err = c.Manga.Path(temp)
 	if err != nil {

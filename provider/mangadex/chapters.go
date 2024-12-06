@@ -1,12 +1,14 @@
 package mangadex
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
 
 	"github.com/darylhjd/mangodex"
 	"github.com/metafates/mangal/key"
+	"github.com/metafates/mangal/log"
 	"github.com/metafates/mangal/source"
 	"github.com/spf13/viper"
 	"golang.org/x/exp/slices"
@@ -92,6 +94,14 @@ func (m *Mangadex) ChaptersOf(manga *source.Manga) ([]*source.Chapter, error) {
 	slices.SortFunc(chapters, func(a, b *source.Chapter) bool {
 		return a.Index < b.Index
 	})
+
+	// Log the contents of chapters before returning
+	chaptersJSON, err := json.Marshal(chapters)
+	if err != nil {
+		log.Warn("Failed to marshal chapters to JSON:", err)
+	} else {
+		log.Info("Chapters:", string(chaptersJSON))
+	}
 
 	manga.Chapters = chapters
 	_ = m.cache.chapters.Set(manga.URL, chapters)
