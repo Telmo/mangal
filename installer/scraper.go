@@ -4,12 +4,14 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/metafates/mangal/filesystem"
-	"github.com/metafates/mangal/where"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/metafates/mangal/filesystem"
+	"github.com/metafates/mangal/util"
+	"github.com/metafates/mangal/where"
 )
 
 type Scraper struct {
@@ -41,6 +43,8 @@ func (s *Scraper) download() error {
 	if err != nil {
 		return err
 	}
+
+	defer util.Ignore(res.Body.Close)
 
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to get %s: %s", s.URL, res.Status)
