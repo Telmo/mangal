@@ -1,14 +1,12 @@
 package mangadex
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
 
 	"github.com/darylhjd/mangodex"
 	"github.com/metafates/mangal/key"
-	"github.com/metafates/mangal/log"
 	"github.com/metafates/mangal/source"
 	"github.com/spf13/viper"
 	"golang.org/x/exp/slices"
@@ -41,7 +39,8 @@ func (m *Mangadex) ChaptersOf(manga *source.Manga) ([]*source.Chapter, error) {
 
 	var (
 		chapters   []*source.Chapter
-		currOffset = 0
+		currOffset        = 0
+		chapIndex  uint16 = 1
 	)
 
 	language := viper.GetString(key.MangadexLanguage)
@@ -53,7 +52,7 @@ func (m *Mangadex) ChaptersOf(manga *source.Manga) ([]*source.Chapter, error) {
 			return nil, err
 		}
 
-		for i, chapter := range list.Data {
+		for _, chapter := range list.Data {
 			// Skip external chapters. Their pages cannot be downloaded.
 			if chapter.Attributes.ExternalURL != nil && !viper.GetBool(key.MangadexShowUnavailableChapters) {
 				continue
@@ -77,13 +76,15 @@ func (m *Mangadex) ChaptersOf(manga *source.Manga) ([]*source.Chapter, error) {
 				volume = fmt.Sprintf("Vol.%s", *chapter.Attributes.Volume)
 			}
 			chapters = append(chapters, &source.Chapter{
-				Name:   name,
-				Index:  uint16(i),
-				ID:     chapter.ID,
-				URL:    fmt.Sprintf("https://mangadex.org/chapter/%s", chapter.ID),
-				Manga:  manga,
+				Name:  name,
+				Index: chapIndex,
+				ID:    chapter.ID,
+				URL:   fmt.Sprintf("https://mangadex.org/chapter/%s", chapter.ID),
+				Manga: manga,
+
 				Volume: volume,
 			})
+			chapIndex++
 		}
 		currOffset += 500
 		if currOffset >= list.Total {
@@ -94,14 +95,6 @@ func (m *Mangadex) ChaptersOf(manga *source.Manga) ([]*source.Chapter, error) {
 	slices.SortFunc(chapters, func(a, b *source.Chapter) bool {
 		return a.Index < b.Index
 	})
-
-	// Log the contents of chapters before returning
-	chaptersJSON, err := json.Marshal(chapters)
-	if err != nil {
-		log.Warn("Failed to marshal chapters to JSON:", err)
-	} else {
-		log.Info("Chapters:", string(chaptersJSON))
-	}
 
 	manga.Chapters = chapters
 	_ = m.cache.chapters.Set(manga.URL, chapters)
