@@ -15,15 +15,15 @@ func SaveMangaMetadata(db *sql.DB, manga *model.Manga) error {
 	}
 	defer tx.Rollback()
 
-	// Insert manga
+	// Insert manga with title as unique key
 	_, err = tx.Exec(`
 		INSERT INTO manga (
 			id, title, description, url, cover, source_id, source_name,
 			status, start_year, start_month, end_year, end_month,
 			total_chapters, publisher
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(id) DO UPDATE SET
-			title = excluded.title,
+		ON CONFLICT(title) DO UPDATE SET
+			id = excluded.id,
 			description = excluded.description,
 			url = excluded.url,
 			cover = excluded.cover,
@@ -160,7 +160,7 @@ func SaveMangaMetadata(db *sql.DB, manga *model.Manga) error {
 // GetMangaMetadata retrieves manga metadata from the SQLite database
 func GetMangaMetadata(db *sql.DB, id string) (*model.Manga, error) {
 	manga := &model.Manga{ID: id}
-	
+
 	// Get main manga data
 	err := db.QueryRow(`
 		SELECT title, description, url, cover, source_id, source_name,
@@ -259,11 +259,11 @@ func GetMangaMetadata(db *sql.DB, id string) (*model.Manga, error) {
 
 // InitDB initializes the database tables
 func InitDB(db *sql.DB) error {
-	// Create manga table
+	// Create manga table with title as unique key
 	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS manga (
 			id TEXT PRIMARY KEY,
-			title TEXT NOT NULL,
+			title TEXT UNIQUE,
 			description TEXT,
 			url TEXT,
 			cover TEXT,
@@ -282,17 +282,39 @@ func InitDB(db *sql.DB) error {
 		return fmt.Errorf("failed to create manga table: %w", err)
 	}
 
+	// Create genres table
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS genres (
+			id TEXT PRIMARY KEY,
+			name TEXT
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create genres table: %w", err)
+	}
+
 	// Create manga_genres table
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS manga_genres (
 			manga_id TEXT,
 			genre_id TEXT,
-			PRIMARY KEY (manga_id, genre_id),
-			FOREIGN KEY (manga_id) REFERENCES manga(id) ON DELETE CASCADE
+			FOREIGN KEY (manga_id) REFERENCES manga(id),
+			FOREIGN KEY (genre_id) REFERENCES genres(id)
 		)
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create manga_genres table: %w", err)
+	}
+
+	// Create staff table
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS staff (
+			id TEXT PRIMARY KEY,
+			name TEXT
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create staff table: %w", err)
 	}
 
 	// Create manga_staff table
@@ -301,12 +323,23 @@ func InitDB(db *sql.DB) error {
 			manga_id TEXT,
 			staff_id TEXT,
 			role TEXT,
-			PRIMARY KEY (manga_id, staff_id),
-			FOREIGN KEY (manga_id) REFERENCES manga(id) ON DELETE CASCADE
+			FOREIGN KEY (manga_id) REFERENCES manga(id),
+			FOREIGN KEY (staff_id) REFERENCES staff(id)
 		)
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create manga_staff table: %w", err)
+	}
+
+	// Create characters table
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS characters (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create characters table: %w", err)
 	}
 
 	// Create manga_characters table
@@ -322,6 +355,17 @@ func InitDB(db *sql.DB) error {
 		return fmt.Errorf("failed to create manga_characters table: %w", err)
 	}
 
+	// Create tags table
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS tags (
+			id TEXT PRIMARY KEY,
+			name TEXT NOT NULL
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create tags table: %w", err)
+	}
+
 	// Create manga_tags table
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS manga_tags (
@@ -333,50 +377,6 @@ func InitDB(db *sql.DB) error {
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create manga_tags table: %w", err)
-	}
-
-	// Create genres table
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS genres (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create genres table: %w", err)
-	}
-
-	// Create staff table
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS staff (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create staff table: %w", err)
-	}
-
-	// Create characters table
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS characters (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create characters table: %w", err)
-	}
-
-	// Create tags table
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS tags (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create tags table: %w", err)
 	}
 
 	return nil
