@@ -7,6 +7,7 @@ import (
 	"github.com/metafates/mangal/icon"
 	"github.com/metafates/mangal/key"
 	"github.com/metafates/mangal/style"
+	"github.com/metafates/mangal/source"
 	"github.com/metafates/mangal/util"
 	"github.com/muesli/reflow/wrap"
 	"github.com/spf13/viper"
@@ -137,17 +138,19 @@ func (b *statefulBubble) viewRead() string {
 		chapterName = chapter.Name
 	}
 
+	lines := []string{
+		style.Title("Reading"),
+		"",
+		truncatedText(fmt.Sprintf(icon.Get(icon.Progress)+" Downloading %s", style.Fg(color.Purple)(chapterName)), b.width),
+		"",
+		truncatedText(b.spinnerC.View()+b.progressStatus, b.width),
+		"",
+		truncatedText(b.downloadingChapterMetainfo(), b.width),
+	}
+
 	return b.renderLines(
 		true,
-		[]string{
-			style.Title("Reading"),
-			"",
-			style.Truncate(b.width)(fmt.Sprintf(icon.Get(icon.Progress)+" Downloading %s", style.Fg(color.Purple)(chapterName))),
-			"",
-			style.Truncate(b.width)(b.spinnerC.View() + b.progressStatus),
-			"",
-			style.Truncate(b.width)(b.downloadingChapterMetainfo()),
-		},
+		lines,
 	)
 }
 
@@ -159,19 +162,21 @@ func (b *statefulBubble) viewDownload() string {
 		chapterName = chapter.Name
 	}
 
+	lines := []string{
+		style.Title("Downloading"),
+		"",
+		truncatedText(fmt.Sprintf(icon.Get(icon.Progress)+" Downloading %s", style.Fg(color.Purple)(chapterName)), b.width),
+		"",
+		b.progressC.View(),
+		"",
+		truncatedText(b.spinnerC.View()+b.progressStatus, b.width),
+		"",
+		truncatedText(b.downloadingChapterMetainfo(), b.width),
+	}
+
 	return b.renderLines(
 		true,
-		[]string{
-			style.Title("Downloading"),
-			"",
-			style.Truncate(b.width)(fmt.Sprintf(icon.Get(icon.Progress)+" Downloading %s", style.Fg(color.Purple)(chapterName))),
-			"",
-			b.progressC.View(),
-			"",
-			style.Truncate(b.width)(b.spinnerC.View() + b.progressStatus),
-			"",
-			style.Truncate(b.width)(b.downloadingChapterMetainfo()),
-		},
+		lines,
 	)
 }
 
@@ -242,6 +247,38 @@ func (b *statefulBubble) renderLines(addHelp bool, lines []string) string {
 	}
 
 	return paddingStyle.Render(l)
+}
+
+func (b *statefulBubble) truncate(s string, max int) string {
+	if max <= 0 {
+		return s
+	}
+	if len(s) <= max {
+		return s
+	}
+	return s[:max-3] + "..."
+}
+
+func (b *statefulBubble) renderMangaItem(item *source.Manga) string {
+	truncate := func(s string, max int) string {
+		if max <= 0 {
+			return s
+		}
+		if len(s) <= max {
+			return s
+		}
+		return s[:max-3] + "..."
+	}
+
+	title := style.New().Width(b.width).Bold(true).Render(truncate(item.Name, b.width))
+	desc := style.New().Width(b.width).Render(truncate(item.URL, b.width))
+	filterValue := style.New().Width(b.width).Faint(true).Render(truncate(item.ID, b.width))
+
+	return fmt.Sprintf("%s\n%s\n%s", title, desc, filterValue)
+}
+
+func truncatedText(s string, width int) string {
+	return style.New().Width(width).Render(style.Truncate(width)(s))
 }
 
 func randomPlot() string {

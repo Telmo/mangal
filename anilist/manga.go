@@ -86,6 +86,20 @@ type Manga struct {
 	External []struct {
 		URL string `json:"url" jsonschema:"description=URL of the external link."`
 	} `json:"externalLinks" jsonschema:"description=External links related to the manga."`
+	// Format of the manga (MANGA, NOVEL, ONE_SHOT, etc.)
+	Format string `json:"format" jsonschema:"description=Format of the manga"`
+	// Volumes is the amount of volumes the manga has when complete.
+	Volumes int `json:"volumes" jsonschema:"description=Amount of volumes the manga has when complete"`
+	// AverageScore is the average score of the manga.
+	AverageScore int `json:"averageScore" jsonschema:"description=Average score of the manga"`
+	// Popularity is the number of users who have the manga in their list.
+	Popularity int `json:"popularity" jsonschema:"description=Number of users who have the manga in their list"`
+	// MeanScore is the mean score of the manga.
+	MeanScore int `json:"meanScore" jsonschema:"description=Mean score of the manga"`
+	// IsLicensed indicates if the manga is licensed.
+	IsLicensed bool `json:"isLicensed" jsonschema:"description=Indicates if the manga is licensed"`
+	// UpdatedAt is the timestamp of when the manga was last updated.
+	UpdatedAt int `json:"updatedAt" jsonschema:"description=Timestamp of when the manga was last updated"`
 }
 
 // Name of the manga. If English is available, it will be used. Otherwise, Romaji will be used.

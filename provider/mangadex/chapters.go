@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/darylhjd/mangodex"
 	"github.com/metafates/mangal/key"
@@ -92,8 +93,26 @@ func (m *Mangadex) ChaptersOf(manga *source.Manga) ([]*source.Chapter, error) {
 		}
 	}
 
-	slices.SortFunc(chapters, func(a, b *source.Chapter) bool {
-		return a.Index < b.Index
+	// Sort chapters by volume and chapter number
+	slices.SortFunc(chapters, func(a, b *source.Chapter) int {
+		// Compare volumes first
+		if a.Volume != b.Volume {
+			if a.Volume == "" {
+				return 1
+			}
+			if b.Volume == "" {
+				return -1
+			}
+			return strings.Compare(a.Volume, b.Volume)
+		}
+		// If volumes are equal, compare indices
+		if a.Index < b.Index {
+			return -1
+		}
+		if a.Index > b.Index {
+			return 1
+		}
+		return 0
 	})
 
 	manga.Chapters = chapters

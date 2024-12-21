@@ -1,5 +1,10 @@
 changelog-temp.md
 mangal
+anilist_search
+mangadex_search
+
+# Rule files
+.*rules
 
 ######
 # Go #

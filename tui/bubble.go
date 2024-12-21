@@ -22,7 +22,6 @@ import (
 	"github.com/samber/mo"
 	"github.com/spf13/viper"
 	"golang.org/x/exp/slices"
-	"strings"
 	"time"
 )
 
@@ -296,10 +295,14 @@ func (b *statefulBubble) loadProviders() tea.Cmd {
 			internal: p,
 		})
 	}
-	slices.SortFunc(items, func(a, b list.Item) bool {
-		// temporary workaround for placing mangadex second because it is not stable for now
-		// but, you know, there is nothing more permanent than a temporary solution
-		return strings.Compare(a.FilterValue(), b.FilterValue()) > 0
+	slices.SortFunc(items, func(a, b list.Item) int {
+		if a.FilterValue() < b.FilterValue() {
+			return -1
+		}
+		if a.FilterValue() > b.FilterValue() {
+			return 1
+		}
+		return 0
 	})
 
 	var customItems []list.Item
@@ -308,8 +311,14 @@ func (b *statefulBubble) loadProviders() tea.Cmd {
 			internal: p,
 		})
 	}
-	slices.SortFunc(customItems, func(a, b list.Item) bool {
-		return strings.Compare(a.FilterValue(), b.FilterValue()) < 0
+	slices.SortFunc(customItems, func(a, b list.Item) int {
+		if a.FilterValue() < b.FilterValue() {
+			return -1
+		}
+		if a.FilterValue() > b.FilterValue() {
+			return 1
+		}
+		return 0
 	})
 
 	// built-in providers should come first
@@ -323,11 +332,23 @@ func (b *statefulBubble) loadHistory() (tea.Cmd, error) {
 	}
 
 	chapters := lo.Values(saved)
-	slices.SortFunc(chapters, func(a, b *history.SavedChapter) bool {
+	slices.SortFunc(chapters, func(a, b *history.SavedChapter) int {
 		if a.MangaName == b.MangaName {
-			return a.Name < b.Name
+			if a.Name < b.Name {
+				return -1
+			}
+			if a.Name > b.Name {
+				return 1
+			}
+			return 0
 		}
-		return a.MangaName < b.MangaName
+		if a.MangaName < b.MangaName {
+			return -1
+		}
+		if a.MangaName > b.MangaName {
+			return 1
+		}
+		return 0
 	})
 
 	var items []list.Item

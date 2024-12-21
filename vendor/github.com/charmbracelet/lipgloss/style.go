@@ -10,6 +10,8 @@ import (
 	"github.com/muesli/termenv"
 )
 
+const tabWidthDefault = 4
+
 // Property for a key.
 type propKey int
 
@@ -68,6 +70,7 @@ const (
 	inlineKey
 	maxWidthKey
 	maxHeightKey
+	tabWidthKey
 	underlineSpacesKey
 	strikethroughSpacesKey
 )
@@ -75,17 +78,34 @@ const (
 // A set of properties.
 type rules map[propKey]interface{}
 
-// NewStyle returns a new, empty Style.  While it's syntactic sugar for the
+// NewStyle returns a new, empty Style. While it's syntactic sugar for the
 // Style{} primitive, it's recommended to use this function for creating styles
-// incase the underlying implementation changes.
+// in case the underlying implementation changes. It takes an optional string
+// value to be set as the underlying string value for this style.
 func NewStyle() Style {
-	return Style{}
+	return renderer.NewStyle()
+}
+
+// NewStyle returns a new, empty Style. While it's syntactic sugar for the
+// Style{} primitive, it's recommended to use this function for creating styles
+// in case the underlying implementation changes. It takes an optional string
+// value to be set as the underlying string value for this style.
+func (r *Renderer) NewStyle() Style {
+	s := Style{r: r}
+	return s
 }
 
 // Style contains a set of rules that comprise a style as a whole.
 type Style struct {
+	r     *Renderer
 	rules map[propKey]interface{}
 	value string
+}
+
+// joinString joins a list of strings into a single string separated with a
+// space.
+func joinString(strs ...string) string {
+	return strings.Join(strs, " ")
 }
 
 // SetString sets the underlying string value for this style. To render once
@@ -93,8 +113,8 @@ type Style struct {
 // a convenience for cases when having a stringer implementation is handy, such
 // as when using fmt.Sprintf. You can also simply define a style and render out
 // strings directly with Style.Render.
-func (s Style) SetString(str string) Style {
-	s.value = str
+func (s Style) SetString(strs ...string) Style {
+	s.value = joinString(strs...)
 	return s
 }
 
@@ -107,7 +127,7 @@ func (s Style) Value() string {
 // on the rules in this style. An underlying string value must be set with
 // Style.SetString prior to using this method.
 func (s Style) String() string {
-	return s.Render(s.value)
+	return s.Render()
 }
 
 // Copy returns a copy of this style, including any underlying string values.
@@ -117,6 +137,7 @@ func (s Style) Copy() Style {
 	for k, v := range s.rules {
 		o.rules[k] = v
 	}
+	o.r = s.r
 	o.value = s.value
 	return o
 }
@@ -130,7 +151,7 @@ func (s Style) Inherit(i Style) Style {
 	s.init()
 
 	for k, v := range i.rules {
-		switch k {
+		switch k { //nolint:exhaustive
 		case marginTopKey, marginRightKey, marginBottomKey, marginLeftKey:
 			// Margins are not inherited
 			continue
@@ -153,11 +174,21 @@ func (s Style) Inherit(i Style) Style {
 }
 
 // Render applies the defined style formatting to a given string.
-func (s Style) Render(str string) string {
+func (s Style) Render(strs ...string) string {
+	if s.r == nil {
+		s.r = renderer
+	}
+	if s.value != "" {
+		strs = append([]string{s.value}, strs...)
+	}
+
 	var (
-		te           termenv.Style
-		teSpace      termenv.Style
-		teWhitespace termenv.Style
+		str = joinString(strs...)
+
+		p            = s.r.ColorProfile()
+		te           = p.String()
+		teSpace      = p.String()
+		teWhitespace = p.String()
 
 		bold          = s.getAsBool(boldKey, false)
 		italic        = s.getAsBool(italicKey, false)
@@ -197,7 +228,7 @@ func (s Style) Render(str string) string {
 	)
 
 	if len(s.rules) == 0 {
-		return str
+		return s.maybeConvertTabs(str)
 	}
 
 	// Enable support for ANSI on the legacy Windows cmd.exe console. This is a
@@ -227,24 +258,22 @@ func (s Style) Render(str string) string {
 	}
 
 	if fg != noColor {
-		fgc := fg.color()
-		te = te.Foreground(fgc)
+		te = te.Foreground(fg.color(s.r))
 		if styleWhitespace {
-			teWhitespace = teWhitespace.Foreground(fgc)
+			teWhitespace = teWhitespace.Foreground(fg.color(s.r))
 		}
 		if useSpaceStyler {
-			teSpace = teSpace.Foreground(fgc)
+			teSpace = teSpace.Foreground(fg.color(s.r))
 		}
 	}
 
 	if bg != noColor {
-		bgc := bg.color()
-		te = te.Background(bgc)
+		te = te.Background(bg.color(s.r))
 		if colorWhitespace {
-			teWhitespace = teWhitespace.Background(bgc)
+			teWhitespace = teWhitespace.Background(bg.color(s.r))
 		}
 		if useSpaceStyler {
-			teSpace = teSpace.Background(bgc)
+			teSpace = teSpace.Background(bg.color(s.r))
 		}
 	}
 
@@ -261,6 +290,9 @@ func (s Style) Render(str string) string {
 	if strikethroughSpaces {
 		teSpace = teSpace.CrossOut()
 	}
+
+	// Potentially convert tabs to spaces
+	str = s.maybeConvertTabs(str)
 
 	// Strip newlines in single line mode
 	if inline {
@@ -372,6 +404,21 @@ func (s Style) Render(str string) string {
 	return str
 }
 
+func (s Style) maybeConvertTabs(str string) string {
+	tw := tabWidthDefault
+	if s.isSet(tabWidthKey) {
+		tw = s.getAsInt(tabWidthKey)
+	}
+	switch tw {
+	case -1:
+		return str
+	case 0:
+		return strings.ReplaceAll(str, "\t", "")
+	default:
+		return strings.ReplaceAll(str, "\t", strings.Repeat(" ", tw))
+	}
+}
+
 func (s Style) applyMargins(str string, inline bool) string {
 	var (
 		topMargin    = s.getAsInt(marginTopKey)
@@ -384,7 +431,7 @@ func (s Style) applyMargins(str string, inline bool) string {
 
 	bgc := s.getAsColor(marginBackgroundKey)
 	if bgc != noColor {
-		styler = styler.Background(bgc.color())
+		styler = styler.Background(bgc.color(s.r))
 	}
 
 	// Add left and right margin
@@ -432,7 +479,7 @@ func padLeft(str string, n int, style *termenv.Style) string {
 	return b.String()
 }
 
-// Apply right right padding.
+// Apply right padding.
 func padRight(str string, n int, style *termenv.Style) string {
 	if n == 0 || str == "" {
 		return str

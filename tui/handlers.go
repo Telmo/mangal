@@ -16,7 +16,6 @@ import (
 	"github.com/metafates/mangal/util"
 	"github.com/spf13/viper"
 	"golang.org/x/exp/slices"
-	"strings"
 	"sync"
 )
 
@@ -31,8 +30,15 @@ func (b *statefulBubble) loadScrapers() tea.Cmd {
 		}
 		b.progressStatus = "Scrapers Loaded"
 
-		slices.SortFunc(scrapers, func(a, b *installer.Scraper) bool {
-			return strings.Compare(a.Name, b.Name) < 0
+		// Sort scrapers by name
+		slices.SortFunc(scrapers, func(a, b *installer.Scraper) int {
+			if a.Name < b.Name {
+				return -1
+			}
+			if a.Name > b.Name {
+				return 1
+			}
+			return 0
 		})
 
 		var items = make([]list.Item, len(scrapers))

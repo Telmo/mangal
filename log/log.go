@@ -42,9 +42,15 @@ func Setup() error {
 	log.SetOutput(logFile)
 
 	if viper.GetBool(key.LogsJson) {
-		log.SetFormatter(&log.JSONFormatter{PrettyPrint: true})
+		log.SetFormatter(&log.JSONFormatter{
+			PrettyPrint: true,
+			TimestampFormat: "2006-01-02 15:04:05",
+		})
 	} else {
-		log.SetFormatter(&log.TextFormatter{})
+		log.SetFormatter(&log.TextFormatter{
+			TimestampFormat: "2006-01-02 15:04:05",
+			FullTimestamp:   true,
+		})
 	}
 
 	switch viper.GetString(key.LogsLevel) {

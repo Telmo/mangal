@@ -5,14 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com), and this project adheres to
 [Semantic Versioning](https://semver.org).
 
+## 4.0.8
+
+### Added
+- Debug mode for metadata operations:
+- New config flag: `metadata.debug` (default: false)
+ When enabled, debug files are written to `~/.config/mangal/debug/`
+- Debug files include: `series.json`, `anilist_search.json`, and `anilist_exact_match.json`
+- Can be enabled via environment variable: `MANGAL_METADATA_DEBUG=true`
+- currently debug files are only related to series metadata
+- MangaDex as fallback metadata source when Anilist search returns no results
+
+### Changed
+- Enhanced logging format to include seconds in timestamps
+- Improved consistency between series.json and database metadata
+
 ## 4.0.7
 
 ### Added
 - SQLite database support for storing manga metadata
 - Configurable database location via:
-  - Environment variable: `MANGAL_DATABASE_PATH`
-  - Config file: `database.path`
-  - Default location: `$XDG_DATA_HOME/mangal/mangal.db` or `~/.local/share/mangal/mangal.db`
+- Environment variable: `MANGAL_DATABASE_PATH`
+- Config file: `database.path`
+- Default location: `$XDG_DATA_HOME/mangal/mangal.db` or `~/.local/share/mangal/mangal.db`
 
 ### Changed
 - Improved metadata handling with both JSON and SQLite storage

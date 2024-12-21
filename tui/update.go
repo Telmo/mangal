@@ -21,6 +21,7 @@ import (
 	"github.com/samber/mo"
 	"github.com/spf13/viper"
 	"golang.org/x/exp/slices"
+	"strings"
 	"time"
 )
 
@@ -634,8 +635,25 @@ func (b *statefulBubble) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return b, tea.Quit
 		case key.Matches(msg, b.keymap.confirm):
 			chapters := lo.Keys(b.selectedChapters)
-			slices.SortFunc(chapters, func(a, b *source.Chapter) bool {
-				return a.Index > b.Index
+			slices.SortFunc(chapters, func(a, b *source.Chapter) int {
+				// Compare volumes first
+				if a.Volume != b.Volume {
+					if a.Volume == "" {
+						return 1
+					}
+					if b.Volume == "" {
+						return -1
+					}
+					return strings.Compare(a.Volume, b.Volume)
+				}
+				// If volumes are equal, compare indices
+				if a.Index < b.Index {
+					return -1
+				}
+				if a.Index > b.Index {
+					return 1
+				}
+				return 0
 			})
 
 			for _, chapter := range chapters {

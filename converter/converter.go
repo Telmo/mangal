@@ -21,7 +21,7 @@ type Converter interface {
 var converters = map[string]Converter{
 	constant.FormatPlain: plain.New(),
 	constant.FormatCBZ:   cbz.New(),
-	constant.FormatPDF:   pdf.New(),
+	constant.FormatPDF:   &pdf.PDF{},
 	constant.FormatZIP:   zip.New(),
 }
 
@@ -37,5 +37,5 @@ func Get(name string) (Converter, error) {
 		return converter, nil
 	}
 
-	return nil, fmt.Errorf("unkown format \"%s\", available options are %s", name, strings.Join(Available(), ", "))
+	return nil, fmt.Errorf("unknown format \"%s\", available options are %s", name, strings.Join(Available(), ", "))
 }

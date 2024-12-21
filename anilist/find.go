@@ -1,12 +1,18 @@
 package anilist
 
 import (
+	"encoding/json"
 	"fmt"
-	levenshtein "github.com/ka-weihe/fast-levenshtein"
+	"github.com/metafates/mangal/key"
 	"github.com/metafates/mangal/log"
 	"github.com/metafates/mangal/util"
+	"github.com/metafates/mangal/where"
 	"github.com/samber/lo"
+	"github.com/spf13/viper"
+	"os"
+	"path/filepath"
 	"strings"
+	levenshtein "github.com/ka-weihe/fast-levenshtein"
 )
 
 // normalizedName returns a normalized name for comparison
@@ -44,6 +50,27 @@ func FindClosest(name string) (*Manga, error) {
 	for _, manga := range mangas {
 		if normalizedName(manga.Name()) == name {
 			log.Info("Found exact match: " + manga.Name())
+
+			// Write debug file if debug flag is set
+			if viper.GetBool(key.MetadataDebug) {
+				debugDir := filepath.Join(where.Config(), "debug")
+				debugFile := filepath.Join(debugDir, "anilist_exact_match.json")
+				log.Infof("Writing exact match result to debug directory: %s", debugFile)
+				if data, err := json.MarshalIndent(manga, "", "  "); err != nil {
+					log.Errorf("Failed to marshal exact match result: %v", err)
+				} else {
+					if err := os.MkdirAll(debugDir, 0755); err != nil {
+						log.Errorf("Failed to create debug directory: %v", err)
+					} else {
+						if err := os.WriteFile(debugFile, data, 0644); err != nil {
+							log.Errorf("Failed to write exact match result: %v", err)
+						} else {
+							log.Infof("Successfully wrote exact match result to %s", debugFile)
+						}
+					}
+				}
+			}
+
 			_ = relationCacher.Set(name, manga.ID)
 			_ = idCacher.Set(manga.ID, manga)
 			return manga, nil

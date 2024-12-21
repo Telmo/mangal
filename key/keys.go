@@ -3,7 +3,7 @@ package key
 // DefinedFieldsCount is the number of fields defined in this package.
 // You have to manually update this number when you add a new field
 // to check later if every field has a defined default value
-const DefinedFieldsCount = 54
+const DefinedFieldsCount = 55
 
 const (
 	DownloaderPath                = "downloader.path"
@@ -30,6 +30,7 @@ const (
 	MetadataComicInfoXMLAlternativeDate       = "metadata.comic_info_xml_alternative_date"
 	MetadataComicInfoXMLTagRelevanceThreshold = "metadata.comic_info_xml_tag_relevance_threshold"
 	MetadataSeriesJSON                        = "metadata.series_json"
+	MetadataDebug                             = "metadata.debug"
 )
 
 const (

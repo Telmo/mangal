@@ -14,28 +14,28 @@ var Config = &generic.Configuration{
 	Delay:           50 * time.Millisecond,
 	Parallelism:     50,
 	ReverseChapters: true,
-	BaseURL:         "https://ww5.manganelo.tv/",
+	BaseURL:         "https://chapmanganato.com/",
 	GenerateSearchURL: func(query string) string {
 		query = strings.TrimSpace(query)
 		query = strings.ToLower(query)
 		query = url.QueryEscape(query)
-		template := "https://ww5.manganelo.tv/search/%s"
+		template := "https://chapmanganato.com/search/%s"
 		return fmt.Sprintf(template, query)
 	},
 	MangaExtractor: &generic.Extractor{
-		Selector: ".search-story-item",
+		Selector: ".panel-search-story .search-story-item",
 		Name: func(selection *goquery.Selection) string {
-			return selection.Find("a.item-title").Text()
+			return selection.Find(".item-title").Text()
 		},
 		URL: func(selection *goquery.Selection) string {
-			return selection.Find("a.item-title").AttrOr("href", "")
+			return selection.Find(".item-title").AttrOr("href", "")
 		},
 		Cover: func(selection *goquery.Selection) string {
-			return selection.Find(".item-img img").AttrOr("src", "")
+			return selection.Find(".item-img").AttrOr("src", "")
 		},
 	},
 	ChapterExtractor: &generic.Extractor{
-		Selector: "li.a-h",
+		Selector: ".chapter-list .chapter-item",
 		Name: func(selection *goquery.Selection) string {
 			name := selection.Find(".chapter-name").Text()
 			if strings.HasPrefix(name, "Vol.") {
@@ -60,6 +60,9 @@ var Config = &generic.Configuration{
 		Selector: ".container-chapter-reader img",
 		Name:     nil,
 		URL: func(selection *goquery.Selection) string {
+			if src := selection.AttrOr("src", ""); src != "" {
+				return src
+			}
 			return selection.AttrOr("data-src", "")
 		},
 	},

@@ -55,24 +55,64 @@ type MangaMetadata struct {
 	URLs []string `json:"urls"`
 	// Publisher of the manga
 	Publisher string `json:"publisher"`
+	// Format of the manga (MANGA, NOVEL, ONE_SHOT, etc.)
+	Format string `json:"format"`
+	// Volumes is the amount of volumes the manga has when complete
+	Volumes int `json:"volumes"`
+	// AverageScore is the average score of the manga
+	AverageScore int `json:"averageScore"`
+	// Popularity is the number of users who have the manga in their list
+	Popularity int `json:"popularity"`
+	// MeanScore is the mean score of the manga
+	MeanScore int `json:"meanScore"`
+	// IsLicensed indicates if the manga is licensed
+	IsLicensed bool `json:"isLicensed"`
+	// UpdatedAt is the timestamp of when the manga was last updated
+	UpdatedAt int `json:"updatedAt"`
 }
 
 // SeriesJSON represents metadata in series.json format
 type SeriesJSON struct {
 	Metadata struct {
-		Type                 string `json:"type"`
-		Name                 string `json:"name"`
-		DescriptionFormatted string `json:"description_formatted"`
-		DescriptionText      string `json:"description_text"`
-		Publisher           string `json:"publisher"`
-		Status              string `json:"status"`
-		Year                int    `json:"year"`
-		TotalChapters       int    `json:"total_chapters"`
-		TotalIssues        int    `json:"total_issues"`
-		BookType           string `json:"booktype"`
-		ComicImage         string `json:"ComicImage"`
-		ComicID            int    `json:"comicId"`
-		PublicationRun     string `json:"publication_run"`
+		Type                 string   `json:"type"`
+		Name                 string   `json:"name"`
+		DescriptionFormatted string   `json:"descriptionFormatted"`
+		DescriptionText      string   `json:"descriptionText"`
+		Publisher           string   `json:"publisher"`
+		Status              string   `json:"status"`
+		Year                int      `json:"year"`
+		TotalChapters       int      `json:"totalChapters"`
+		TotalIssues         int      `json:"totalIssues"`
+		BookType            string   `json:"bookType"`
+		ComicImage          string   `json:"comicImage"`
+		ComicID             int      `json:"comicID"`
+		PublicationRun      string   `json:"publicationRun"`
+		Genres              []string `json:"genres"`
+		Tags                []string `json:"tags"`
+		Characters          []string `json:"characters"`
+		Staff               struct {
+			Story       []string `json:"story"`
+			Art         []string `json:"art"`
+			Translation []string `json:"translation"`
+			Lettering   []string `json:"lettering"`
+		} `json:"staff"`
+		Volumes       int      `json:"volumes"`
+		Chapters      int      `json:"chapters"`
+		AverageScore  int      `json:"averageScore"`
+		Popularity    int      `json:"popularity"`
+		MeanScore     int      `json:"meanScore"`
+		IsLicensed    bool     `json:"isLicensed"`
+		UpdatedAt     int      `json:"updatedAt"`
+		URLs          []string `json:"urls"`
+		BannerImage   string   `json:"bannerImage"`
+		Cover         struct {
+			ExtraLarge string `json:"extraLarge"`
+			Large      string `json:"large"`
+			Medium     string `json:"medium"`
+			Color      string `json:"color"`
+		} `json:"cover"`
+		Synonyms      []string `json:"synonyms"`
+		Format        string   `json:"format"`
 	} `json:"metadata"`
 }
 

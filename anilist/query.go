@@ -16,6 +16,7 @@ tags {
 	name
 	description
 	rank
+	category
 }
 genres
 coverImage {
@@ -25,12 +26,16 @@ coverImage {
 	color
 }
 bannerImage
-characters (page: 1, perPage: 10, role: MAIN) {
+characters (page: 1, perPage: 25) {
 	nodes {
 		id
 		name {
 			full
 			native
+		}
+		description
+		image {
+			large
 		}
 	}
 }
@@ -46,12 +51,18 @@ endDate {
 }
 staff {
 	edges {
-	  role
-	  node {
-		name {
-		  full
+		role
+		node {
+			id
+			name {
+				full
+				native
+			}
+			description
+			image {
+				large
+			}
 		}
-	  }
 	}
 }
 status
@@ -61,6 +72,40 @@ chapters
 countryOfOrigin
 externalLinks {
 	url
+	site
+	type
+}
+format
+volumes
+averageScore
+popularity
+meanScore
+isLicensed
+updatedAt
+recommendations {
+	nodes {
+		mediaRecommendation {
+			id
+			title {
+				romaji
+				english
+				native
+			}
+		}
+	}
+}
+relations {
+	edges {
+		relationType
+		node {
+			id
+			title {
+				romaji
+				english
+				native
+			}
+		}
+	}
 }
 `
 

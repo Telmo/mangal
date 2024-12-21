@@ -10,7 +10,7 @@ func TestManganelo(t *testing.T) {
 	Convey("Given a mangapill instance", t, func() {
 		mangapill := generic.New(Config)
 		Convey("When searching for a manga", func() {
-			mangas, err := mangapill.Search("Death Note")
+			mangas, err := mangapill.Search("Naruto")
 			Convey("Then the error should be nil", func() {
 				So(err, ShouldBeNil)
 
@@ -48,7 +48,7 @@ func TestManganelo(t *testing.T) {
 										Convey("And the result should be a list of pages", func() {
 											So(len(pages), ShouldBeGreaterThan, 0)
 
-											Convey("And each page should have a URL, non nil contents and chapter relation", func() {
+											Convey("And each page should have a URL and chapter relation", func() {
 												for _, page := range pages {
 													So(page.URL, ShouldNotBeEmpty)
 													So(page.Chapter, ShouldEqual, chapters[0])

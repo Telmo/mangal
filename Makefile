@@ -19,15 +19,18 @@ help:
 	@echo "  uninstall    Uninstall the mangal binary"
 	@echo "  test         Run the tests"
 	@echo "  gif          Generate usage gifs"
+	@echo "  mangadex     Build the mangadex_search binary"
 	@echo "  help         Show this help message"
 	@echo ""
 
 install:
 	@go install "$(build_flags)"
 
-
 build:
 	@go build "$(build_flags)"
+
+mangadex:
+	@go build "$(build_flags)" -o mangadex_search ./cmd/mangadex_search
 
 test:
 	@go test ./...

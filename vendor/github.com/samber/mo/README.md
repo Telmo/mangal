@@ -3,7 +3,7 @@
 [![tag](https://img.shields.io/github/tag/samber/mo.svg)](https://github.com/samber/mo/releases)
 ![Go Version](https://img.shields.io/badge/Go-%3E%3D%201.18-%23007d9c)
 [![GoDoc](https://godoc.org/github.com/samber/mo?status.svg)](https://pkg.go.dev/github.com/samber/mo)
-![Build Status](https://github.com/samber/mo/actions/workflows/go.yml/badge.svg)
+![Build Status](https://github.com/samber/mo/actions/workflows/test.yml/badge.svg)
 [![Go report](https://goreportcard.com/badge/github.com/samber/mo)](https://goreportcard.com/report/github.com/samber/mo)
 [![Coverage](https://img.shields.io/codecov/c/github/samber/do)](https://codecov.io/gh/samber/mo)
 [![License](https://img.shields.io/github/license/samber/mo)](./LICENSE)
@@ -49,6 +49,8 @@ go get github.com/samber/mo@v1
 This library is v1 and follows SemVer strictly.
 
 No breaking changes will be made to exported APIs before v2.0.0.
+
+This library has no dependencies except the Go std lib.
 
 ## 💡 Quick start
 
@@ -126,6 +128,7 @@ Constructors:
 - `mo.None()` [doc](https://pkg.go.dev/github.com/samber/mo#None) - [play](https://go.dev/play/p/yYQPsYCSYlD)
 - `mo.TupleToOption()` [doc](https://pkg.go.dev/github.com/samber/mo#TupleToOption) - [play](https://go.dev/play/p/gkrg2pZwOty)
 - `mo.EmptyableToOption()` [doc](https://pkg.go.dev/github.com/samber/mo#EmptyableToOption) - [play](https://go.dev/play/p/GSpQQ-q-UES)
+- `mo.PointerToOption()` [doc](https://pkg.go.dev/github.com/samber/mo#PointerToOption) - [play](https://go.dev/play/p/yPVMj4DUb-I)
 
 Methods:
 
@@ -136,6 +139,7 @@ Methods:
 - `.MustGet()` [doc](https://pkg.go.dev/github.com/samber/mo#Option.MustGet) - [play](https://go.dev/play/p/RVBckjdi5WR)
 - `.OrElse()` [doc](https://pkg.go.dev/github.com/samber/mo#Option.OrElse) - [play](https://go.dev/play/p/TrGByFWCzXS)
 - `.OrEmpty()` [doc](https://pkg.go.dev/github.com/samber/mo#Option.OrEmpty) - [play](https://go.dev/play/p/SpSUJcE-tQm)
+- `.ToPointer()` [doc](https://pkg.go.dev/github.com/samber/mo#Option.ToPointer) - [play](https://go.dev/play/p/N43w92SM-Bs)
 - `.ForEach()` [doc](https://pkg.go.dev/github.com/samber/mo#Option.ForEach)
 - `.Match()` [doc](https://pkg.go.dev/github.com/samber/mo#Option.Match) - [play](https://go.dev/play/p/1V6st3LDJsM)
 - `.Map()` [doc](https://pkg.go.dev/github.com/samber/mo#Option.Map) - [play](https://go.dev/play/p/mvfP3pcP_eJ)
@@ -160,6 +164,7 @@ Constructors:
 
 - `mo.Ok()` [doc](https://pkg.go.dev/github.com/samber/mo#Ok) - [play](https://go.dev/play/p/PDwADdzNoyZ)
 - `mo.Err()` [doc](https://pkg.go.dev/github.com/samber/mo#Err) - [play](https://go.dev/play/p/PDwADdzNoyZ)
+- `mo.Errf()` [doc](https://pkg.go.dev/github.com/samber/mo#Errf) - [play](https://go.dev/play/p/N43w92SM-Bs)
 - `mo.TupleToResult()` [doc](https://pkg.go.dev/github.com/samber/mo#TupleToResult) - [play](https://go.dev/play/p/KWjfqQDHQwa)
 - `mo.Try()` [doc](https://pkg.go.dev/github.com/samber/mo#Try) - [play](https://go.dev/play/p/ilOlQx-Mx42)
 
@@ -381,7 +386,7 @@ make watch-test
 
 Give a ⭐️ if this project helped you!
 
-[![support us](https://c5.patreon.com/external/logo/become_a_patron_button.png)](https://www.patreon.com/samber)
+[![GitHub Sponsors](https://img.shields.io/github/sponsors/samber?style=for-the-badge)](https://github.com/sponsors/samber)
 
 ## 📝 License
 

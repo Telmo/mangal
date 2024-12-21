@@ -347,7 +347,12 @@ panic, fatal, error, warn, info, debug, trace`,
 	{
 		key.LogsJson,
 		false,
-		"Use json format for logs",
+		"Write logs in JSON format",
+	},
+	{
+		key.MetadataDebug,
+		false,
+		"Write debug files to config directory",
 	},
 	{
 		key.AnilistEnable,

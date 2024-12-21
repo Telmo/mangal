@@ -1,6 +1,9 @@
 package source
 
 import (
+	"database/sql"
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/metafates/mangal/database"
 	"github.com/metafates/mangal/filesystem"
 	"github.com/metafates/mangal/util"
 	"github.com/samber/lo"
@@ -10,8 +13,22 @@ import (
 	"testing"
 )
 
+var testDB *sql.DB
+
 func init() {
 	filesystem.SetMemMapFs()
+	
+	// Initialize test database
+	var err error
+	testDB, err = sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		panic(err)
+	}
+	
+	err = database.InitMangaDB(testDB)
+	if err != nil {
+		panic(err)
+	}
 }
 
 type testSource struct{}

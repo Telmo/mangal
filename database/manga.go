@@ -2,26 +2,79 @@ package database
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"github.com/metafates/mangal/model"
 )
 
-// SaveMangaMetadata stores manga metadata in the SQLite database
+// SaveMangaMetadata saves manga metadata to the SQLite database
 func SaveMangaMetadata(db *sql.DB, manga *model.Manga) error {
 	tx, err := db.Begin()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	// Insert manga with title as unique key
+	// Convert slices to JSON strings
+	genres, err := json.Marshal(manga.Metadata.Genres)
+	if err != nil {
+		return fmt.Errorf("failed to marshal genres: %w", err)
+	}
+
+	tags, err := json.Marshal(manga.Metadata.Tags)
+	if err != nil {
+		return fmt.Errorf("failed to marshal tags: %w", err)
+	}
+
+	characters, err := json.Marshal(manga.Metadata.Characters)
+	if err != nil {
+		return fmt.Errorf("failed to marshal characters: %w", err)
+	}
+
+	storyStaff, err := json.Marshal(manga.Metadata.Staff.Story)
+	if err != nil {
+		return fmt.Errorf("failed to marshal story staff: %w", err)
+	}
+
+	artStaff, err := json.Marshal(manga.Metadata.Staff.Art)
+	if err != nil {
+		return fmt.Errorf("failed to marshal art staff: %w", err)
+	}
+
+	translationStaff, err := json.Marshal(manga.Metadata.Staff.Translation)
+	if err != nil {
+		return fmt.Errorf("failed to marshal translation staff: %w", err)
+	}
+
+	letteringStaff, err := json.Marshal(manga.Metadata.Staff.Lettering)
+	if err != nil {
+		return fmt.Errorf("failed to marshal lettering staff: %w", err)
+	}
+
+	urls, err := json.Marshal(manga.Metadata.URLs)
+	if err != nil {
+		return fmt.Errorf("failed to marshal URLs: %w", err)
+	}
+
+	synonyms, err := json.Marshal(manga.Metadata.Synonyms)
+	if err != nil {
+		return fmt.Errorf("failed to marshal synonyms: %w", err)
+	}
+
+	metadata, err := json.Marshal(manga.Metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
 	_, err = tx.Exec(`
 		INSERT INTO manga (
 			id, title, description, url, cover, source_id, source_name,
 			status, start_year, start_month, end_year, end_month,
-			total_chapters, publisher
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			total_chapters, publisher, format, volumes, average_score,
+			popularity, mean_score, is_licensed, updated_at, genres, tags, characters,
+			staff_story, staff_art, staff_translation, staff_lettering, urls, banner_image, synonyms, metadata
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(title) DO UPDATE SET
 			id = excluded.id,
 			description = excluded.description,
@@ -35,143 +88,94 @@ func SaveMangaMetadata(db *sql.DB, manga *model.Manga) error {
 			end_year = excluded.end_year,
 			end_month = excluded.end_month,
 			total_chapters = excluded.total_chapters,
-			publisher = excluded.publisher
-	`,
-		manga.ID,
-		manga.Title,
-		manga.Description,
-		manga.URL,
-		manga.Metadata.Cover.ExtraLarge,
-		manga.SourceID,
-		manga.SourceName,
+			publisher = excluded.publisher,
+			format = excluded.format,
+			volumes = excluded.volumes,
+			average_score = excluded.average_score,
+			popularity = excluded.popularity,
+			mean_score = excluded.mean_score,
+			is_licensed = excluded.is_licensed,
+			updated_at = excluded.updated_at,
+			genres = excluded.genres,
+			tags = excluded.tags,
+			characters = excluded.characters,
+			staff_story = excluded.staff_story,
+			staff_art = excluded.staff_art,
+			staff_translation = excluded.staff_translation,
+			staff_lettering = excluded.staff_lettering,
+			urls = excluded.urls,
+			banner_image = excluded.banner_image,
+			synonyms = excluded.synonyms,
+			metadata = excluded.metadata
+		`,
+		manga.ID, manga.Title, manga.Description, manga.URL,
+		manga.Metadata.Cover.ExtraLarge, manga.SourceID, manga.SourceName,
 		manga.Metadata.Status,
-		manga.Metadata.StartDate.Year,
-		manga.Metadata.StartDate.Month,
-		manga.Metadata.EndDate.Year,
-		manga.Metadata.EndDate.Month,
+		manga.Metadata.StartDate.Year, manga.Metadata.StartDate.Month,
+		manga.Metadata.EndDate.Year, manga.Metadata.EndDate.Month,
 		manga.Metadata.Chapters,
 		manga.Metadata.Publisher,
+		manga.Metadata.Format,
+		manga.Metadata.Volumes,
+		manga.Metadata.AverageScore,
+		manga.Metadata.Popularity,
+		manga.Metadata.MeanScore,
+		manga.Metadata.IsLicensed,
+		manga.Metadata.UpdatedAt,
+		string(genres),
+		string(tags),
+		string(characters),
+		string(storyStaff),
+		string(artStaff),
+		string(translationStaff),
+		string(letteringStaff),
+		string(urls),
+		manga.Metadata.BannerImage,
+		string(synonyms),
+		string(metadata),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to insert manga: %w", err)
+		return fmt.Errorf("failed to insert/update manga: %w", err)
 	}
 
-	// Delete existing genres
-	_, err = tx.Exec("DELETE FROM manga_genres WHERE manga_id = ?", manga.ID)
-	if err != nil {
-		return fmt.Errorf("failed to delete existing genres: %w", err)
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	// Insert genres
-	for _, genre := range manga.Metadata.Genres {
-		// Insert into genres table if not exists
-		_, err = tx.Exec("INSERT OR IGNORE INTO genres (id, name) VALUES (?, ?)", genre, genre)
-		if err != nil {
-			return fmt.Errorf("failed to insert genre: %w", err)
-		}
-
-		// Insert into manga_genres
-		_, err = tx.Exec("INSERT INTO manga_genres (manga_id, genre_id) VALUES (?, ?)", manga.ID, genre)
-		if err != nil {
-			return fmt.Errorf("failed to insert manga genre: %w", err)
-		}
-	}
-
-	// Delete existing staff
-	_, err = tx.Exec("DELETE FROM manga_staff WHERE manga_id = ?", manga.ID)
-	if err != nil {
-		return fmt.Errorf("failed to delete existing staff: %w", err)
-	}
-
-	// Insert staff (both Story and Art)
-	for _, story := range manga.Metadata.Staff.Story {
-		// Insert into staff table if not exists
-		_, err = tx.Exec("INSERT OR IGNORE INTO staff (id, name) VALUES (?, ?)", story, story)
-		if err != nil {
-			return fmt.Errorf("failed to insert staff: %w", err)
-		}
-
-		// Insert into manga_staff
-		_, err = tx.Exec("INSERT INTO manga_staff (manga_id, staff_id, role) VALUES (?, ?, ?)", manga.ID, story, "Story")
-		if err != nil {
-			return fmt.Errorf("failed to insert manga staff: %w", err)
-		}
-	}
-
-	for _, art := range manga.Metadata.Staff.Art {
-		// Insert into staff table if not exists
-		_, err = tx.Exec("INSERT OR IGNORE INTO staff (id, name) VALUES (?, ?)", art, art)
-		if err != nil {
-			return fmt.Errorf("failed to insert staff: %w", err)
-		}
-
-		// Insert into manga_staff
-		_, err = tx.Exec("INSERT INTO manga_staff (manga_id, staff_id, role) VALUES (?, ?, ?)", manga.ID, art, "Art")
-		if err != nil {
-			return fmt.Errorf("failed to insert manga staff: %w", err)
-		}
-	}
-
-	// Delete existing characters
-	_, err = tx.Exec("DELETE FROM manga_characters WHERE manga_id = ?", manga.ID)
-	if err != nil {
-		return fmt.Errorf("failed to delete existing characters: %w", err)
-	}
-
-	// Insert characters
-	for _, character := range manga.Metadata.Characters {
-		// Insert into characters table if not exists
-		_, err = tx.Exec("INSERT OR IGNORE INTO characters (id, name) VALUES (?, ?)", character, character)
-		if err != nil {
-			return fmt.Errorf("failed to insert character: %w", err)
-		}
-
-		// Insert into manga_characters
-		_, err = tx.Exec("INSERT INTO manga_characters (manga_id, character_id) VALUES (?, ?)", manga.ID, character)
-		if err != nil {
-			return fmt.Errorf("failed to insert manga character: %w", err)
-		}
-	}
-
-	// Delete existing tags
-	_, err = tx.Exec("DELETE FROM manga_tags WHERE manga_id = ?", manga.ID)
-	if err != nil {
-		return fmt.Errorf("failed to delete existing tags: %w", err)
-	}
-
-	// Insert tags
-	for _, tag := range manga.Metadata.Tags {
-		// Insert into tags table if not exists
-		_, err = tx.Exec("INSERT OR IGNORE INTO tags (id, name) VALUES (?, ?)", tag, tag)
-		if err != nil {
-			return fmt.Errorf("failed to insert tag: %w", err)
-		}
-
-		// Insert into manga_tags
-		_, err = tx.Exec("INSERT INTO manga_tags (manga_id, tag_id) VALUES (?, ?)", manga.ID, tag)
-		if err != nil {
-			return fmt.Errorf("failed to insert manga tag: %w", err)
-		}
-	}
-
-	return tx.Commit()
+	return nil
 }
 
 // GetMangaMetadata retrieves manga metadata from the SQLite database
 func GetMangaMetadata(db *sql.DB, id string) (*model.Manga, error) {
-	manga := &model.Manga{ID: id}
+	manga := &model.Manga{
+		ID: id,
+	}
 
-	// Get main manga data
+	var (
+		genresJson         string
+		tagsJson          string
+		charactersJson    string
+		storyStaffJson    string
+		artStaffJson      string
+		translationStaffJson string
+		letteringStaffJson string
+		urlsJson          string
+		synonymsJson      string
+		metadataJson      string
+	)
+
 	err := db.QueryRow(`
 		SELECT title, description, url, cover, source_id, source_name,
-		       status, start_year, start_month, end_year, end_month,
-		       total_chapters, publisher
+		status, start_year, start_month, end_year, end_month,
+		total_chapters, publisher, format, volumes, average_score,
+		popularity, mean_score, is_licensed, updated_at, genres, tags, characters,
+		staff_story, staff_art, staff_translation, staff_lettering, urls, banner_image, synonyms, metadata
 		FROM manga WHERE id = ?`, id,
 	).Scan(
 		&manga.Title,
 		&manga.Description,
 		&manga.URL,
-		&manga.Cover,
+		&manga.Metadata.Cover.ExtraLarge,
 		&manga.SourceID,
 		&manga.SourceName,
 		&manga.Metadata.Status,
@@ -181,203 +185,65 @@ func GetMangaMetadata(db *sql.DB, id string) (*model.Manga, error) {
 		&manga.Metadata.EndDate.Month,
 		&manga.Metadata.Chapters,
 		&manga.Metadata.Publisher,
+		&manga.Metadata.Format,
+		&manga.Metadata.Volumes,
+		&manga.Metadata.AverageScore,
+		&manga.Metadata.Popularity,
+		&manga.Metadata.MeanScore,
+		&manga.Metadata.IsLicensed,
+		&manga.Metadata.UpdatedAt,
+		&genresJson,
+		&tagsJson,
+		&charactersJson,
+		&storyStaffJson,
+		&artStaffJson,
+		&translationStaffJson,
+		&letteringStaffJson,
+		&urlsJson,
+		&manga.Metadata.BannerImage,
+		&synonymsJson,
+		&metadataJson,
 	)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to get manga: %w", err)
+		return nil, fmt.Errorf("failed to get manga metadata: %w", err)
 	}
 
-	// Get genres
-	rows, err := db.Query("SELECT genre_id FROM manga_genres WHERE manga_id = ?", id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get genres: %w", err)
+	// Unmarshal JSON strings to slices
+	if err := json.Unmarshal([]byte(genresJson), &manga.Metadata.Genres); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal genres: %w", err)
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var genre string
-		if err := rows.Scan(&genre); err != nil {
-			return nil, fmt.Errorf("failed to scan genre: %w", err)
-		}
-		manga.Metadata.Genres = append(manga.Metadata.Genres, genre)
+	if err := json.Unmarshal([]byte(tagsJson), &manga.Metadata.Tags); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal tags: %w", err)
 	}
-
-	// Get staff
-	rows, err = db.Query("SELECT staff_id, role FROM manga_staff WHERE manga_id = ?", id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get staff: %w", err)
+	if err := json.Unmarshal([]byte(charactersJson), &manga.Metadata.Characters); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal characters: %w", err)
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var staff string
-		var role string
-		if err := rows.Scan(&staff, &role); err != nil {
-			return nil, fmt.Errorf("failed to scan staff: %w", err)
-		}
-		if role == "Story" {
-			manga.Metadata.Staff.Story = append(manga.Metadata.Staff.Story, staff)
-		} else if role == "Art" {
-			manga.Metadata.Staff.Art = append(manga.Metadata.Staff.Art, staff)
-		}
+	if err := json.Unmarshal([]byte(storyStaffJson), &manga.Metadata.Staff.Story); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal story staff: %w", err)
 	}
-
-	// Get characters
-	rows, err = db.Query("SELECT character_id FROM manga_characters WHERE manga_id = ?", id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get characters: %w", err)
+	if err := json.Unmarshal([]byte(artStaffJson), &manga.Metadata.Staff.Art); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal art staff: %w", err)
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var character string
-		if err := rows.Scan(&character); err != nil {
-			return nil, fmt.Errorf("failed to scan character: %w", err)
-		}
-		manga.Metadata.Characters = append(manga.Metadata.Characters, character)
+	if err := json.Unmarshal([]byte(translationStaffJson), &manga.Metadata.Staff.Translation); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal translation staff: %w", err)
 	}
-
-	// Get tags
-	rows, err = db.Query("SELECT tag_id FROM manga_tags WHERE manga_id = ?", id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get tags: %w", err)
+	if err := json.Unmarshal([]byte(letteringStaffJson), &manga.Metadata.Staff.Lettering); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal lettering staff: %w", err)
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var tag string
-		if err := rows.Scan(&tag); err != nil {
-			return nil, fmt.Errorf("failed to scan tag: %w", err)
-		}
-		manga.Metadata.Tags = append(manga.Metadata.Tags, tag)
+	if err := json.Unmarshal([]byte(urlsJson), &manga.Metadata.URLs); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal URLs: %w", err)
+	}
+	if err := json.Unmarshal([]byte(synonymsJson), &manga.Metadata.Synonyms); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal synonyms: %w", err)
+	}
+	if err := json.Unmarshal([]byte(metadataJson), &manga.Metadata); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
 	}
 
 	return manga, nil
 }
 
-// InitDB initializes the database tables
-func InitDB(db *sql.DB) error {
-	// Create manga table with title as unique key
-	_, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS manga (
-			id TEXT PRIMARY KEY,
-			title TEXT UNIQUE,
-			description TEXT,
-			url TEXT,
-			cover TEXT,
-			source_id TEXT,
-			source_name TEXT,
-			status TEXT,
-			start_year INTEGER,
-			start_month INTEGER,
-			end_year INTEGER,
-			end_month INTEGER,
-			total_chapters INTEGER,
-			publisher TEXT
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create manga table: %w", err)
-	}
-
-	// Create genres table
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS genres (
-			id TEXT PRIMARY KEY,
-			name TEXT
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create genres table: %w", err)
-	}
-
-	// Create manga_genres table
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS manga_genres (
-			manga_id TEXT,
-			genre_id TEXT,
-			FOREIGN KEY (manga_id) REFERENCES manga(id),
-			FOREIGN KEY (genre_id) REFERENCES genres(id)
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create manga_genres table: %w", err)
-	}
-
-	// Create staff table
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS staff (
-			id TEXT PRIMARY KEY,
-			name TEXT
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create staff table: %w", err)
-	}
-
-	// Create manga_staff table
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS manga_staff (
-			manga_id TEXT,
-			staff_id TEXT,
-			role TEXT,
-			FOREIGN KEY (manga_id) REFERENCES manga(id),
-			FOREIGN KEY (staff_id) REFERENCES staff(id)
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create manga_staff table: %w", err)
-	}
-
-	// Create characters table
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS characters (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create characters table: %w", err)
-	}
-
-	// Create manga_characters table
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS manga_characters (
-			manga_id TEXT,
-			character_id TEXT,
-			PRIMARY KEY (manga_id, character_id),
-			FOREIGN KEY (manga_id) REFERENCES manga(id) ON DELETE CASCADE
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create manga_characters table: %w", err)
-	}
-
-	// Create tags table
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS tags (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create tags table: %w", err)
-	}
-
-	// Create manga_tags table
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS manga_tags (
-			manga_id TEXT,
-			tag_id TEXT,
-			PRIMARY KEY (manga_id, tag_id),
-			FOREIGN KEY (manga_id) REFERENCES manga(id) ON DELETE CASCADE
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create manga_tags table: %w", err)
-	}
-
-	return nil
+// InitMangaDB initializes the database tables
+func InitMangaDB(db *sql.DB) error {
+	return CreateMangaTable(db)
 }

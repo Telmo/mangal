@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/metafates/mangal/where"
@@ -36,38 +37,9 @@ func GetDB() (*sql.DB, error) {
 
 // initDatabase creates the necessary tables if they don't exist
 func initDatabase(db *sql.DB) error {
-	// Create manga table
-	_, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS manga (
-			id TEXT PRIMARY KEY,
-			title TEXT NOT NULL,
-			description TEXT,
-			url TEXT,
-			cover TEXT,
-			source_id TEXT,
-			source_name TEXT,
-			status TEXT,
-			start_year INTEGER,
-			start_month INTEGER,
-			end_year INTEGER,
-			end_month INTEGER,
-			total_chapters INTEGER,
-			publisher TEXT
-		)
-	`)
+	err := InitMangaDB(db)
 	if err != nil {
 		return fmt.Errorf("failed to create manga table: %w", err)
-	}
-
-	// Create genres table
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS genres (
-			id TEXT PRIMARY KEY,
-			name TEXT NOT NULL
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create genres table: %w", err)
 	}
 
 	// Create manga_genres table
@@ -158,6 +130,115 @@ func initDatabase(db *sql.DB) error {
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create manga_tags table: %w", err)
+	}
+
+	return nil
+}
+
+// CreateMangaTable creates the manga table if it doesn't exist
+func CreateMangaTable(db *sql.DB) error {
+	// Drop existing manga table to ensure schema changes take effect
+	_, err := db.Exec(`DROP TABLE IF EXISTS manga;`)
+	if err != nil {
+		return fmt.Errorf("failed to drop manga table: %w", err)
+	}
+
+	// Create manga table
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS manga (
+			id TEXT PRIMARY KEY,
+			title TEXT NOT NULL UNIQUE,
+			description TEXT,
+			url TEXT,
+			source_id TEXT,
+			source_name TEXT,
+			cover TEXT,
+			status TEXT,
+			start_year INTEGER,
+			start_month INTEGER,
+			end_year INTEGER,
+			end_month INTEGER,
+			total_chapters INTEGER,
+			publisher TEXT,
+			format TEXT,
+			volumes INTEGER,
+			average_score INTEGER,
+			popularity INTEGER,
+			mean_score INTEGER,
+			is_licensed BOOLEAN,
+			updated_at INTEGER,
+			genres TEXT,
+			tags TEXT,
+			characters TEXT,
+			staff_story TEXT,
+			staff_art TEXT,
+			staff_translation TEXT,
+			staff_lettering TEXT,
+			urls TEXT,
+			banner_image TEXT,
+			synonyms TEXT,
+			metadata TEXT
+		);
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create manga table: %w", err)
+	}
+
+	// Add columns if they don't exist
+	columns := []struct {
+		name string
+		typ  string
+	}{
+		{"description", "TEXT"},
+		{"url", "TEXT"},
+		{"source_id", "TEXT"},
+		{"source_name", "TEXT"},
+		{"cover", "TEXT"},
+		{"status", "TEXT"},
+		{"start_year", "INTEGER"},
+		{"start_month", "INTEGER"},
+		{"end_year", "INTEGER"},
+		{"end_month", "INTEGER"},
+		{"total_chapters", "INTEGER"},
+		{"publisher", "TEXT"},
+		{"format", "TEXT"},
+		{"volumes", "INTEGER"},
+		{"average_score", "INTEGER"},
+		{"popularity", "INTEGER"},
+		{"mean_score", "INTEGER"},
+		{"is_licensed", "BOOLEAN"},
+		{"updated_at", "INTEGER"},
+		{"genres", "TEXT"},
+		{"tags", "TEXT"},
+		{"characters", "TEXT"},
+		{"staff_story", "TEXT"},
+		{"staff_art", "TEXT"},
+		{"staff_translation", "TEXT"},
+		{"staff_lettering", "TEXT"},
+		{"urls", "TEXT"},
+		{"banner_image", "TEXT"},
+		{"synonyms", "TEXT"},
+		{"metadata", "TEXT"},
+	}
+
+	for _, col := range columns {
+		_, err = db.Exec(fmt.Sprintf(`ALTER TABLE manga ADD COLUMN %s %s;`, col.name, col.typ))
+		if err != nil && !strings.Contains(err.Error(), "duplicate column name") {
+			return fmt.Errorf("failed to add %s column: %w", col.name, err)
+		}
+	}
+
+	// Create genres table
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS genres (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			manga_id TEXT,
+			genre TEXT,
+			FOREIGN KEY (manga_id) REFERENCES manga(id)
+		);
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create genres table: %w", err)
 	}
 
 	return nil

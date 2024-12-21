@@ -99,53 +99,76 @@ func (c *Chapter) DownloadPages(temp bool, progress func(string)) (err error) {
 	c.size = 0
 	status := func() string {
 		return fmt.Sprintf(
-			"Downloading %s %s",
-			util.Quantify(len(c.Pages), "page", "pages"),
-			style.Faint(c.SizeHuman()),
+			"Downloading %s: %s",
+			c.Name,
+			style.Faint(humanize.Bytes(c.size)),
 		)
 	}
 
-	progress(status())
-	wg := sync.WaitGroup{}
-	wg.Add(len(c.Pages))
+	path, err := c.Path(temp)
+	if err != nil {
+		return fmt.Errorf("failed to get chapter path: %w", err)
+	}
 
-	for _, page := range c.Pages {
-		if page == nil {
-			return fmt.Errorf("page #%d is empty, aborting download", page.Index)
-		}
+	err = filesystem.Api().MkdirAll(path, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("failed to create chapter directory: %w", err)
+	}
 
-		d := func(page *Page) {
+	// Use errgroup for better error handling in goroutines
+	var wg sync.WaitGroup
+	errChan := make(chan error, len(c.Pages))
+	// Default to 4 parallel downloads if not configured
+	parallelDownloads := 4
+	if viper.IsSet("downloader.parallel_downloads") {
+		parallelDownloads = viper.GetInt("downloader.parallel_downloads")
+	}
+	semaphore := make(chan struct{}, parallelDownloads)
+
+	for i, page := range c.Pages {
+		wg.Add(1)
+		go func(i int, page *Page) {
 			defer wg.Done()
+			semaphore <- struct{}{} // Acquire
+			defer func() { <-semaphore }() // Release
 
-			// if at any point, an error is encountered, stop downloading other pages
-			if err != nil {
+			progress(fmt.Sprintf("%s [%d/%d]", status(), i+1, len(c.Pages)))
+
+			pagePath := filepath.Join(path, fmt.Sprintf("%s.%s",
+				util.PadZero(fmt.Sprint(i+1), len(fmt.Sprint(len(c.Pages)))),
+				page.Extension,
+			))
+
+			// Download page
+			if err := page.Download(); err != nil {
+				errChan <- fmt.Errorf("failed to download page %d: %w", i+1, err)
 				return
 			}
 
-			err = page.Download()
+			// Write page contents to file
+			if err := filesystem.Api().WriteFile(pagePath, page.Contents.Bytes(), os.ModePerm); err != nil {
+				errChan <- fmt.Errorf("failed to write page %d: %w", i+1, err)
+				return
+			}
+
 			c.size += page.Size
-			progress(status())
-		}
-
-		if viper.GetBool(key.DownloaderAsync) {
-			go d(page)
-		} else {
-			d(page)
-		}
+		}(i, page)
 	}
 
+	// Wait for all downloads to complete
 	wg.Wait()
+	close(errChan)
 
-	if err != nil {
-		c.isDownloaded = mo.Some(false)
-		return err
+	// Check for any errors
+	for err := range errChan {
+		if err != nil {
+			return err // Return the first error encountered
+		}
 	}
 
-	c.isDownloaded = mo.Some(!temp)
-	return
+	return nil
 }
 
-// formattedName of the chapter according to the template in the config.
 func (c *Chapter) formattedName() (name string) {
 	name = viper.GetString(key.DownloaderChapterNameTemplate)
 

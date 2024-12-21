@@ -18,18 +18,17 @@ package pdfcpu
 
 import (
 	"fmt"
-	"strings"
+	"sort"
 	"time"
 
 	"github.com/pdfcpu/pdfcpu/pkg/log"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/draw"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/types"
 )
 
-func csvSafeString(s string) string {
-	return strings.Replace(s, ";", ",", -1)
-}
-
 // handleInfoDict extracts relevant infoDict fields into the context.
-func (ctx *Context) handleInfoDict(d Dict) (err error) {
+func handleInfoDict(ctx *model.Context, d types.Dict) (err error) {
 
 	for key, value := range d {
 
@@ -45,7 +44,7 @@ func (ctx *Context) handleInfoDict(d Dict) (err error) {
 			if err != nil {
 				return err
 			}
-			ctx.Author = csvSafeString(ctx.Author)
+			ctx.Author = model.CSVSafeString(ctx.Author)
 
 		case "Subject":
 			log.Write.Println("found Subject")
@@ -60,12 +59,12 @@ func (ctx *Context) handleInfoDict(d Dict) (err error) {
 			if err != nil {
 				return err
 			}
-			ctx.Creator = csvSafeString(ctx.Creator)
+			ctx.Creator = model.CSVSafeString(ctx.Creator)
 
 		case "Producer", "CreationDate", "ModDate":
 			// pdfcpu will modify these as direct dict entries.
 			log.Write.Printf("found %s", key)
-			if indRef, ok := value.(IndirectRef); ok {
+			if indRef, ok := value.(types.IndirectRef); ok {
 				// Get rid of these extra objects.
 				ctx.Optimize.DuplicateInfoObjects[int(indRef.ObjectNumber)] = true
 			}
@@ -82,7 +81,7 @@ func (ctx *Context) handleInfoDict(d Dict) (err error) {
 	return nil
 }
 
-func (ctx *Context) ensureInfoDict() error {
+func ensureInfoDict(ctx *model.Context) error {
 
 	// => 14.3.3 Document Information Dictionary
 
@@ -97,13 +96,13 @@ func (ctx *Context) ensureInfoDict() error {
 	// ModDate		        modified by pdfcpu
 	// Trapped              -
 
-	now := DateString(time.Now())
+	now := types.DateString(time.Now())
 
-	v := "pdfcpu " + VersionStr
+	v := "pdfcpu " + model.VersionStr
 
 	if ctx.Info == nil {
 
-		d := NewDict()
+		d := types.NewDict()
 		d.InsertString("Producer", v)
 		d.InsertString("CreationDate", now)
 		d.InsertString("ModDate", now)
@@ -123,19 +122,19 @@ func (ctx *Context) ensureInfoDict() error {
 		return err
 	}
 
-	if err = ctx.handleInfoDict(d); err != nil {
+	if err = handleInfoDict(ctx, d); err != nil {
 		return err
 	}
 
-	d.Update("CreationDate", StringLiteral(now))
-	d.Update("ModDate", StringLiteral(now))
-	d.Update("Producer", StringLiteral(v))
+	d.Update("CreationDate", types.StringLiteral(now))
+	d.Update("ModDate", types.StringLiteral(now))
+	d.Update("Producer", types.StringLiteral(v))
 
 	return nil
 }
 
 // Write the document info object for this PDF file.
-func (ctx *Context) writeDocumentInfoDict() error {
+func writeDocumentInfoDict(ctx *model.Context) error {
 
 	log.Write.Printf("*** writeDocumentInfoDict begin: offset=%d ***\n", ctx.Write.Offset)
 
@@ -165,7 +164,7 @@ func (ctx *Context) writeDocumentInfoDict() error {
 	return nil
 }
 
-func appendEqualMediaAndCropBoxInfo(ss *[]string, pb PageBoundaries, unit string, currUnit DisplayUnit) {
+func appendEqualMediaAndCropBoxInfo(ss *[]string, pb model.PageBoundaries, unit string, currUnit types.DisplayUnit) {
 	mb := pb.MediaBox()
 	tb := pb.TrimBox()
 	bb := pb.BleedBox()
@@ -195,7 +194,7 @@ func appendEqualMediaAndCropBoxInfo(ss *[]string, pb PageBoundaries, unit string
 	}
 }
 
-func trimBleedArtBoxString(cb, tb, bb, ab *Rectangle) string {
+func trimBleedArtBoxString(cb, tb, bb, ab *types.Rectangle) string {
 	s := ""
 	if tb == nil || tb.Equals(*cb) {
 		s += "= TrimBox"
@@ -219,7 +218,7 @@ func trimBleedArtBoxString(cb, tb, bb, ab *Rectangle) string {
 	return s
 }
 
-func appendNotEqualMediaAndCropBoxInfo(ss *[]string, pb PageBoundaries, unit string, currUnit DisplayUnit) {
+func appendNotEqualMediaAndCropBoxInfo(ss *[]string, pb model.PageBoundaries, unit string, currUnit types.DisplayUnit) {
 	mb := pb.MediaBox()
 	cb := pb.CropBox()
 	tb := pb.TrimBox()
@@ -240,7 +239,7 @@ func appendNotEqualMediaAndCropBoxInfo(ss *[]string, pb PageBoundaries, unit str
 	}
 }
 
-func appendPageBoxesInfo(ss *[]string, pb PageBoundaries, unit string, currUnit DisplayUnit, i int) {
+func appendPageBoxesInfo(ss *[]string, pb model.PageBoundaries, unit string, currUnit types.DisplayUnit, i int) {
 	d := pb.CropBox().Dimensions()
 	if pb.Rot%180 != 0 {
 		d.Width, d.Height = d.Height, d.Width
@@ -260,152 +259,299 @@ func appendPageBoxesInfo(ss *[]string, pb PageBoundaries, unit string, currUnit 
 	appendNotEqualMediaAndCropBoxInfo(ss, pb, unit, currUnit)
 }
 
-func (ctx *Context) pageInfo(selectedPages IntSet) ([]string, error) {
-	unit := ctx.unit()
+func pageInfo(info *PDFInfo, selectedPages types.IntSet) ([]string, error) {
+
+	ss := []string{}
+
 	if len(selectedPages) > 0 {
-		// TODO ctx.PageBoundaries(selectedPages)
-		pbs, err := ctx.PageBoundaries()
-		if err != nil {
-			return nil, err
-		}
-		ss := []string{}
-		for i, pb := range pbs {
+		for i, pb := range info.PageBoundaries {
 			if _, found := selectedPages[i+1]; !found {
 				continue
 			}
-			appendPageBoxesInfo(&ss, pb, unit, ctx.Unit, i)
+			appendPageBoxesInfo(&ss, pb, info.UnitString, info.Unit, i)
 		}
 		return ss, nil
 	}
 
-	pd, err := ctx.PageDims()
-	if err != nil {
-		return nil, err
-	}
-
-	m := map[Dim]bool{}
-	for _, d := range pd {
-		m[d] = true
-	}
-
-	ss := []string{}
 	s := "Page size:"
-	for d := range m {
-		dc := ctx.convertToUnit(d)
-		ss = append(ss, fmt.Sprintf("%21s %.2f x %.2f %s", s, dc.Width, dc.Height, unit))
+	for d := range info.PageDimensions {
+		dc := d.ConvertToUnit(info.Unit)
+		ss = append(ss, fmt.Sprintf("%21s %.2f x %.2f %s", s, dc.Width, dc.Height, info.UnitString))
 		s = ""
 	}
-
 	return ss, nil
 }
 
-// InfoDigest returns info about ctx.
-func (ctx *Context) InfoDigest(selectedPages IntSet) ([]string, error) {
-	var separator = "............................................"
-	var ss []string
+type PDFInfo struct {
+	FileName           string                 `json:"source,omitempty"`
+	Version            string                 `json:"version"`
+	PageCount          int                    `json:"pages"`
+	PageBoundaries     []model.PageBoundaries `json:"-"`
+	PageDimensions     map[types.Dim]bool     `json:"-"`
+	Title              string                 `json:"title"`
+	Author             string                 `json:"author"`
+	Subject            string                 `json:"subject"`
+	Producer           string                 `json:"producer"`
+	Creator            string                 `json:"creator"`
+	CreationDate       string                 `json:"creationDate"`
+	ModificationDate   string                 `json:"modificationDate"`
+	Keywords           []string               `json:"keywords"`
+	Properties         map[string]string      `json:"properties"`
+	Tagged             bool                   `json:"tagged"`
+	Hybrid             bool                   `json:"hybrid"`
+	Linearized         bool                   `json:"linearized"`
+	UsingXRefStreams   bool                   `json:"usingXRefStreams"`
+	UsingObjectStreams bool                   `json:"usingObjectStreams"`
+	Watermarked        bool                   `json:"watermarked"`
+	Thumbnails         bool                   `json:"thumbnails"`
+	Form               bool                   `json:"form"`
+	Signatures         bool                   `json:"signatures"`
+	AppendOnly         bool                   `json:"appendOnly"`
+	Outlines           bool                   `json:"bookmarks"`
+	Names              bool                   `json:"names"`
+	Encrypted          bool                   `json:"encrypted"`
+	Permissions        int                    `json:"permissions"`
+	Attachments        []model.Attachment     `json:"attachments,omitempty"`
+	Unit               types.DisplayUnit      `json:"-"`
+	UnitString         string                 `json:"-"`
+}
+
+func (info PDFInfo) renderKeywords(ss *[]string) error {
+	for i, l := range info.Keywords {
+		if i == 0 {
+			*ss = append(*ss, fmt.Sprintf("%20s: %s", "Keywords", l))
+			continue
+		}
+		*ss = append(*ss, fmt.Sprintf("%20s  %s", "", l))
+	}
+	return nil
+}
+
+func (info PDFInfo) renderProperties(ss *[]string) error {
+	first := true
+	for k, v := range info.Properties {
+		if first {
+			*ss = append(*ss, fmt.Sprintf("%20s: %s = %s", "Properties", k, v))
+			first = false
+			continue
+		}
+		*ss = append(*ss, fmt.Sprintf("%20s  %s = %s", "", k, v))
+	}
+	return nil
+}
+
+func (info PDFInfo) renderFlagsPart1(ss *[]string, separator string) {
+
+	*ss = append(*ss, separator)
+
+	s := "No"
+	if info.Tagged {
+		s = "Yes"
+	}
+	*ss = append(*ss, fmt.Sprintf("              Tagged: %s", s))
+
+	s = "No"
+	if info.Hybrid {
+		s = "Yes"
+	}
+	*ss = append(*ss, fmt.Sprintf("              Hybrid: %s", s))
+
+	s = "No"
+	if info.Linearized {
+		s = "Yes"
+	}
+	*ss = append(*ss, fmt.Sprintf("          Linearized: %s", s))
+
+	s = "No"
+	if info.UsingXRefStreams {
+		s = "Yes"
+	}
+	*ss = append(*ss, fmt.Sprintf("  Using XRef streams: %s", s))
+
+	s = "No"
+	if info.UsingObjectStreams {
+		s = "Yes"
+	}
+	*ss = append(*ss, fmt.Sprintf("Using object streams: %s", s))
+}
+
+func (info PDFInfo) renderFlagsPart2(ss *[]string, separator string) {
+
+	s := "No"
+	if info.Watermarked {
+		s = "Yes"
+	}
+	*ss = append(*ss, fmt.Sprintf("         Watermarked: %s", s))
+
+	s = "No"
+	if info.Thumbnails {
+		s = "Yes"
+	}
+	*ss = append(*ss, fmt.Sprintf("          Thumbnails: %s", s))
+
+	s = "No"
+	if info.Form {
+		s = "Yes"
+	}
+	*ss = append(*ss, fmt.Sprintf("                Form: %s", s))
+	if info.Form {
+		if info.Signatures || info.AppendOnly {
+			*ss = append(*ss, "     SignaturesExist: Yes")
+			s = "No"
+			if info.AppendOnly {
+				s = "Yes"
+			}
+			*ss = append(*ss, fmt.Sprintf("          AppendOnly: %s", s))
+		}
+	}
+
+	s = "No"
+	if info.Outlines {
+		s = "Yes"
+	}
+	*ss = append(*ss, fmt.Sprintf("            Outlines: %s", s))
+
+	s = "No"
+	if info.Names {
+		s = "Yes"
+	}
+	*ss = append(*ss, fmt.Sprintf("               Names: %s", s))
+
+	*ss = append(*ss, separator)
+
+	s = "No"
+	if info.Encrypted {
+		s = "Yes"
+	}
+	*ss = append(*ss, fmt.Sprintf("%20s: %s", "Encrypted", s))
+}
+
+func (info *PDFInfo) renderFlags(ss *[]string, separator string) {
+	info.renderFlagsPart1(ss, separator)
+	info.renderFlagsPart2(ss, separator)
+}
+
+func (info *PDFInfo) renderPermissions(ss *[]string) {
+	l := PermissionsList(info.Permissions)
+	if len(l) == 1 {
+		*ss = append(*ss, fmt.Sprintf("%20s: %s", "Permissions", l[0]))
+	} else {
+		*ss = append(*ss, fmt.Sprintf("%20s:", "Permissions"))
+		*ss = append(*ss, l...)
+	}
+}
+
+func (info *PDFInfo) renderAttachments(ss *[]string) {
+	ss0 := []string{}
+	for _, a := range info.Attachments {
+		ss0 = append(ss0, a.FileName)
+	}
+	sort.Strings(ss0)
+	*ss = append(*ss, ss0...)
+}
+
+// Info returns info about ctx.
+func Info(ctx *model.Context, fileName string, selectedPages types.IntSet) (*PDFInfo, error) {
+
+	info := &PDFInfo{FileName: fileName, Unit: ctx.Unit, UnitString: ctx.UnitString()}
+
 	v := ctx.HeaderVersion
 	if ctx.RootVersion != nil {
 		v = ctx.RootVersion
 	}
-	ss = append(ss, fmt.Sprintf("%20s: %s", "PDF version", v))
-	ss = append(ss, fmt.Sprintf("%20s: %d", "Page count", ctx.PageCount))
+	info.Version = (*v).String()
 
-	pi, err := ctx.pageInfo(selectedPages)
+	info.PageCount = ctx.PageCount
+
+	// PageBoundaries for selected pages.
+	pbs, err := ctx.PageBoundaries(selectedPages)
+	if err != nil {
+		return nil, err
+	}
+	info.PageBoundaries = pbs
+
+	// Media box dimensions for all pages.
+	pd, err := ctx.PageDims()
+	if err != nil {
+		return nil, err
+	}
+	m := map[types.Dim]bool{}
+	for _, d := range pd {
+		m[d] = true
+	}
+	info.PageDimensions = m
+
+	info.Title = ctx.Title
+	info.Subject = ctx.Subject
+	info.Producer = ctx.Producer
+	info.Creator = ctx.Creator
+	info.CreationDate = ctx.CreationDate
+	info.ModificationDate = ctx.ModDate
+
+	kwl, err := KeywordsList(ctx.XRefTable)
+	if err != nil {
+		return nil, err
+	}
+	info.Keywords = kwl
+
+	info.Properties = ctx.Properties
+	info.Tagged = ctx.Tagged
+	info.Hybrid = ctx.Read.Hybrid
+	info.Linearized = ctx.Read.Linearized
+	info.UsingXRefStreams = ctx.Read.UsingXRefStreams
+	info.UsingObjectStreams = ctx.Read.UsingObjectStreams
+	info.Watermarked = ctx.Watermarked
+	info.Thumbnails = len(ctx.PageThumbs) > 0
+	info.Form = ctx.Form != nil
+	info.Signatures = ctx.SignatureExist
+	info.AppendOnly = ctx.AppendOnly
+
+	if ctx.E != nil {
+		info.Permissions = ctx.E.P
+	}
+
+	aa, err := ctx.ListAttachments()
+	if err != nil {
+		return nil, err
+	}
+	info.Attachments = aa
+
+	return info, nil
+}
+
+// ListInfo returns formatted info about ctx.
+func ListInfo(info *PDFInfo, selectedPages types.IntSet) ([]string, error) {
+
+	var separator = draw.HorSepLine([]int{44})
+
+	var ss []string
+
+	if info.FileName != "" {
+		ss = append(ss, fmt.Sprintf("%20s: %s", "Source", info.FileName))
+	}
+	ss = append(ss, fmt.Sprintf("%20s: %s", "PDF version", info.Version))
+	ss = append(ss, fmt.Sprintf("%20s: %d", "Page count", info.PageCount))
+
+	pi, err := pageInfo(info, selectedPages)
 	if err != nil {
 		return nil, err
 	}
 	ss = append(ss, pi...)
 
-	ss = append(ss, fmt.Sprintf(separator))
-	ss = append(ss, fmt.Sprintf("%20s: %s", "Title", ctx.Title))
-	ss = append(ss, fmt.Sprintf("%20s: %s", "Author", ctx.Author))
-	ss = append(ss, fmt.Sprintf("%20s: %s", "Subject", ctx.Subject))
-	ss = append(ss, fmt.Sprintf("%20s: %s", "PDF Producer", ctx.Producer))
-	ss = append(ss, fmt.Sprintf("%20s: %s", "Content creator", ctx.Creator))
-	ss = append(ss, fmt.Sprintf("%20s: %s", "Creation date", ctx.CreationDate))
-	ss = append(ss, fmt.Sprintf("%20s: %s", "Modification date", ctx.ModDate))
+	ss = append(ss, fmt.Sprint(separator))
+	ss = append(ss, fmt.Sprintf("%20s: %s", "Title", info.Title))
+	ss = append(ss, fmt.Sprintf("%20s: %s", "Author", info.Author))
+	ss = append(ss, fmt.Sprintf("%20s: %s", "Subject", info.Subject))
+	ss = append(ss, fmt.Sprintf("%20s: %s", "PDF Producer", info.Producer))
+	ss = append(ss, fmt.Sprintf("%20s: %s", "Content creator", info.Creator))
+	ss = append(ss, fmt.Sprintf("%20s: %s", "Creation date", info.CreationDate))
+	ss = append(ss, fmt.Sprintf("%20s: %s", "Modification date", info.ModificationDate))
 
-	if err := ctx.addKeywordsToInfoDigest(&ss); err != nil {
-		return nil, err
-	}
-
-	if err := ctx.addPropertiesToInfoDigest(&ss); err != nil {
-		return nil, err
-	}
-
-	ss = append(ss, separator)
-
-	s := "No"
-	if ctx.Tagged {
-		s = "Yes"
-	}
-	ss = append(ss, fmt.Sprintf("              Tagged: %s", s))
-
-	s = "No"
-	if ctx.Read.Hybrid {
-		s = "Yes"
-	}
-	ss = append(ss, fmt.Sprintf("              Hybrid: %s", s))
-
-	s = "No"
-	if ctx.Read.Linearized {
-		s = "Yes"
-	}
-	ss = append(ss, fmt.Sprintf("          Linearized: %s", s))
-
-	s = "No"
-	if ctx.Read.UsingXRefStreams {
-		s = "Yes"
-	}
-	ss = append(ss, fmt.Sprintf("  Using XRef streams: %s", s))
-
-	s = "No"
-	if ctx.Read.UsingObjectStreams {
-		s = "Yes"
-	}
-	ss = append(ss, fmt.Sprintf("Using object streams: %s", s))
-
-	s = "No"
-	if ctx.Watermarked {
-		s = "Yes"
-	}
-	ss = append(ss, fmt.Sprintf("         Watermarked: %s", s))
-
-	s = "No"
-	if len(ctx.PageThumbs) > 0 {
-		s = "Yes"
-	}
-	ss = append(ss, fmt.Sprintf("          Thumbnails: %s", s))
-
-	s = "No"
-	if ctx.AcroForm != nil {
-		s = "Yes"
-	}
-	ss = append(ss, fmt.Sprintf("            Acroform: %s", s))
-	if ctx.AcroForm != nil {
-		if ctx.SignatureExist {
-			ss = append(ss, "     SignaturesExist: Yes")
-			s = "No"
-			if ctx.AppendOnly {
-				s = "Yes"
-			}
-			ss = append(ss, fmt.Sprintf("          AppendOnly: %s", s))
-		}
-	}
-
-	ss = append(ss, separator)
-
-	s = "No"
-	if ctx.Encrypt != nil {
-		s = "Yes"
-	}
-	ss = append(ss, fmt.Sprintf("%20s: %s", "Encrypted", s))
-
-	ctx.addPermissionsToInfoDigest(&ss)
-
-	if err := ctx.addAttachmentsToInfoDigest(&ss); err != nil {
-		return nil, err
-	}
+	info.renderKeywords(&ss)
+	info.renderProperties(&ss)
+	info.renderFlags(&ss, separator)
+	info.renderPermissions(&ss)
+	info.renderAttachments(&ss)
 
 	return ss, nil
 }

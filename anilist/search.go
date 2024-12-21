@@ -4,11 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/metafates/mangal/key"
 	"github.com/metafates/mangal/log"
 	"github.com/metafates/mangal/network"
 	"github.com/metafates/mangal/query"
+	"github.com/metafates/mangal/where"
 	"github.com/samber/lo"
+	"github.com/spf13/viper"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -185,6 +190,27 @@ func SearchByName(name string) ([]*Manga, error) {
 		mangas := response.Data.Page.Media
 		if len(mangas) > 0 {
 			log.Infof("Got response from Anilist, found %d results", len(mangas))
+
+			// Write debug file if debug flag is set
+			if viper.GetBool(key.MetadataDebug) {
+				debugDir := filepath.Join(where.Config(), "debug")
+				debugFile := filepath.Join(debugDir, "anilist_search.json")
+				log.Infof("Writing search results to debug directory: %s", debugFile)
+				if data, err := json.MarshalIndent(mangas, "", "  "); err != nil {
+					log.Errorf("Failed to marshal search results: %v", err)
+				} else {
+					if err := os.MkdirAll(debugDir, 0755); err != nil {
+						log.Errorf("Failed to create debug directory: %v", err)
+					} else {
+						if err := os.WriteFile(debugFile, data, 0644); err != nil {
+							log.Errorf("Failed to write search results: %v", err)
+						} else {
+							log.Infof("Successfully wrote search results to %s", debugFile)
+						}
+					}
+				}
+			}
+
 			ids := make([]int, len(mangas))
 			for i, manga := range mangas {
 				ids[i] = manga.ID

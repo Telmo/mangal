@@ -1,7 +1,7 @@
 package lipgloss
 
 // This could (should) probably just be moved into NewStyle(). We've broken it
-// out so we can call it in a lazy way.
+// out, so we can call it in a lazy way.
 func (s *Style) init() {
 	if s.rules == nil {
 		s.rules = make(rules)
@@ -14,9 +14,16 @@ func (s *Style) set(key propKey, value interface{}) {
 
 	switch v := value.(type) {
 	case int:
-		// We don't allow negative integers on any of our values, so just keep
+		// TabWidth is the only property that may have a negative value (and
+		// that negative value can be no less than -1).
+		if key == tabWidthKey {
+			s.rules[key] = v
+			break
+		}
+
+		// We don't allow negative integers on any of our other values, so just keep
 		// them at zero or above. We could use uints instead, but the
-		// conversions are a little tedious so we're sticking with ints for
+		// conversions are a little tedious, so we're sticking with ints for
 		// sake of usability.
 		s.rules[key] = max(0, v)
 	default:
@@ -39,7 +46,7 @@ func (s Style) Italic(v bool) Style {
 
 // Underline sets an underline rule. By default, underlines will not be drawn on
 // whitespace like margins and padding. To change this behavior set
-// renderUnderlinesOnSpaces.
+// UnderlineSpaces.
 func (s Style) Underline(v bool) Style {
 	s.set(underlineKey, v)
 	return s
@@ -47,7 +54,7 @@ func (s Style) Underline(v bool) Style {
 
 // Strikethrough sets a strikethrough rule. By default, strikes will not be
 // drawn on whitespace like margins and padding. To change this behavior set
-// renderStrikethroughOnSpaces.
+// StrikethroughSpaces.
 func (s Style) Strikethrough(v bool) Style {
 	s.set(strikethroughKey, v)
 	return s
@@ -120,13 +127,13 @@ func (s Style) Align(p ...Position) Style {
 	return s
 }
 
-// HorizontalAlign sets a horizontal text alignment rule.
+// AlignHorizontal sets a horizontal text alignment rule.
 func (s Style) AlignHorizontal(p Position) Style {
 	s.set(alignHorizontalKey, p)
 	return s
 }
 
-// VerticalAlign sets a text alignment rule.
+// AlignVertical sets a vertical text alignment rule.
 func (s Style) AlignVertical(p Position) Style {
 	s.set(alignVerticalKey, p)
 	return s
@@ -251,7 +258,7 @@ func (s Style) MarginBackground(c TerminalColor) Style {
 	return s
 }
 
-// Border is shorthand for setting a the border style and which sides should
+// Border is shorthand for setting the border style and which sides should
 // have a border at once. The variadic argument sides works as follows:
 //
 // With one value, the value is applied to all sides.
@@ -300,8 +307,9 @@ func (s Style) Border(b Border, sides ...bool) Style {
 // the border style, the border will be enabled for all sides during rendering.
 //
 // You can define border characters as you'd like, though several default
-// styles are included: NormalBorder(), RoundedBorder(), ThickBorder(), and
-// DoubleBorder().
+// styles are included: NormalBorder(), RoundedBorder(), BlockBorder(),
+// OuterHalfBlockBorder(), InnerHalfBlockBorder(), ThickBorder(),
+// and DoubleBorder().
 //
 // Example:
 //
@@ -491,20 +499,37 @@ func (s Style) MaxWidth(n int) Style {
 	return o
 }
 
-// MaxHeight applies a max width to a given style. This is useful in enforcing
-// a certain width at render time, particularly with arbitrary strings and
+// MaxHeight applies a max height to a given style. This is useful in enforcing
+// a certain height at render time, particularly with arbitrary strings and
 // styles.
 //
 // Because this in intended to be used at the time of render, this method will
-// not mutate the style and instead return a copy.
+// not mutate the style and instead returns a copy.
 func (s Style) MaxHeight(n int) Style {
 	o := s.Copy()
 	o.set(maxHeightKey, n)
 	return o
 }
 
+// NoTabConversion can be passed to [Style.TabWidth] to disable the replacement
+// of tabs with spaces at render time.
+const NoTabConversion = -1
+
+// TabWidth sets the number of spaces that a tab (/t) should be rendered as.
+// When set to 0, tabs will be removed. To disable the replacement of tabs with
+// spaces entirely, set this to [NoTabConversion].
+//
+// By default, tabs will be replaced with 4 spaces.
+func (s Style) TabWidth(n int) Style {
+	if n <= -1 {
+		n = -1
+	}
+	s.set(tabWidthKey, n)
+	return s
+}
+
 // UnderlineSpaces determines whether to underline spaces between words. By
-// default this is true. Spaces can also be underlined without underlining the
+// default, this is true. Spaces can also be underlined without underlining the
 // text itself.
 func (s Style) UnderlineSpaces(v bool) Style {
 	s.set(underlineSpacesKey, v)
@@ -512,10 +537,17 @@ func (s Style) UnderlineSpaces(v bool) Style {
 }
 
 // StrikethroughSpaces determines whether to apply strikethroughs to spaces
-// between words. By default this is true. Spaces can also be struck without
+// between words. By default, this is true. Spaces can also be struck without
 // underlining the text itself.
 func (s Style) StrikethroughSpaces(v bool) Style {
 	s.set(strikethroughSpacesKey, v)
+	return s
+}
+
+// Renderer sets the renderer for the style. This is useful for changing the
+// renderer for a style that is being used in a different context.
+func (s Style) Renderer(r *Renderer) Style {
+	s.r = r
 	return s
 }
 
@@ -537,19 +569,19 @@ func whichSidesInt(i ...int) (top, right, bottom, left int, ok bool) {
 		left = i[0]
 		right = i[0]
 		ok = true
-	case 2:
+	case 2: //nolint:gomnd
 		top = i[0]
 		bottom = i[0]
 		left = i[1]
 		right = i[1]
 		ok = true
-	case 3:
+	case 3: //nolint:gomnd
 		top = i[0]
 		left = i[1]
 		right = i[1]
 		bottom = i[2]
 		ok = true
-	case 4:
+	case 4: //nolint:gomnd
 		top = i[0]
 		right = i[1]
 		bottom = i[2]
@@ -570,19 +602,19 @@ func whichSidesBool(i ...bool) (top, right, bottom, left bool, ok bool) {
 		left = i[0]
 		right = i[0]
 		ok = true
-	case 2:
+	case 2: //nolint:gomnd
 		top = i[0]
 		bottom = i[0]
 		left = i[1]
 		right = i[1]
 		ok = true
-	case 3:
+	case 3: //nolint:gomnd
 		top = i[0]
 		left = i[1]
 		right = i[1]
 		bottom = i[2]
 		ok = true
-	case 4:
+	case 4: //nolint:gomnd
 		top = i[0]
 		right = i[1]
 		bottom = i[2]
@@ -603,19 +635,19 @@ func whichSidesColor(i ...TerminalColor) (top, right, bottom, left TerminalColor
 		left = i[0]
 		right = i[0]
 		ok = true
-	case 2:
+	case 2: //nolint:gomnd
 		top = i[0]
 		bottom = i[0]
 		left = i[1]
 		right = i[1]
 		ok = true
-	case 3:
+	case 3: //nolint:gomnd
 		top = i[0]
 		left = i[1]
 		right = i[1]
 		bottom = i[2]
 		ok = true
-	case 4:
+	case 4: //nolint:gomnd
 		top = i[0]
 		right = i[1]
 		bottom = i[2]

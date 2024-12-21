@@ -22,19 +22,24 @@ import (
 	"time"
 
 	"github.com/pdfcpu/pdfcpu/pkg/log"
-	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu"
+	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
+	"github.com/pkg/errors"
 )
 
 // Trim generates a trimmed version of rs
 // containing all selected pages and writes the result to w.
-func Trim(rs io.ReadSeeker, w io.Writer, selectedPages []string, conf *pdfcpu.Configuration) error {
-	if conf == nil {
-		conf = pdfcpu.NewDefaultConfiguration()
+func Trim(rs io.ReadSeeker, w io.Writer, selectedPages []string, conf *model.Configuration) error {
+	if rs == nil {
+		return errors.New("pdfcpu: Trim: missing rs")
 	}
-	conf.Cmd = pdfcpu.TRIM
+
+	if conf == nil {
+		conf = model.NewDefaultConfiguration()
+	}
+	conf.Cmd = model.TRIM
 
 	fromStart := time.Now()
-	ctx, durRead, durVal, durOpt, err := readValidateAndOptimize(rs, conf, fromStart)
+	ctx, durRead, durVal, durOpt, err := ReadValidateAndOptimize(rs, conf, fromStart)
 	if err != nil {
 		return err
 	}
@@ -45,7 +50,7 @@ func Trim(rs io.ReadSeeker, w io.Writer, selectedPages []string, conf *pdfcpu.Co
 
 	fromWrite := time.Now()
 
-	pages, err := PagesForPageSelection(ctx.PageCount, selectedPages, false)
+	pages, err := PagesForPageSelection(ctx.PageCount, selectedPages, false, true)
 	if err != nil {
 		return err
 	}
@@ -67,7 +72,7 @@ func Trim(rs io.ReadSeeker, w io.Writer, selectedPages []string, conf *pdfcpu.Co
 
 // TrimFile generates a trimmed version of inFile
 // containing all selected pages and writes the result to outFile.
-func TrimFile(inFile, outFile string, selectedPages []string, conf *pdfcpu.Configuration) (err error) {
+func TrimFile(inFile, outFile string, selectedPages []string, conf *model.Configuration) (err error) {
 	var f1, f2 *os.File
 
 	if f1, err = os.Open(inFile); err != nil {
@@ -82,6 +87,7 @@ func TrimFile(inFile, outFile string, selectedPages []string, conf *pdfcpu.Confi
 		log.CLI.Printf("writing %s...\n", inFile)
 	}
 	if f2, err = os.Create(tmpFile); err != nil {
+		f1.Close()
 		return err
 	}
 
@@ -89,7 +95,9 @@ func TrimFile(inFile, outFile string, selectedPages []string, conf *pdfcpu.Confi
 		if err != nil {
 			f2.Close()
 			f1.Close()
-			os.Remove(tmpFile)
+			if outFile == "" || inFile == outFile {
+				os.Remove(tmpFile)
+			}
 			return
 		}
 		if err = f2.Close(); err != nil {
@@ -99,9 +107,7 @@ func TrimFile(inFile, outFile string, selectedPages []string, conf *pdfcpu.Confi
 			return
 		}
 		if outFile == "" || inFile == outFile {
-			if err = os.Rename(tmpFile, inFile); err != nil {
-				return
-			}
+			err = os.Rename(tmpFile, inFile)
 		}
 	}()
 
