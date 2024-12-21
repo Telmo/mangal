@@ -9,7 +9,10 @@ import (
 	"github.com/metafates/mangal/query"
 	"github.com/samber/lo"
 	"net/http"
+	"regexp"
 	"strconv"
+	"strings"
+	"unicode"
 )
 
 type searchByNameResponse struct {
@@ -26,7 +29,7 @@ type searchByIDResponse struct {
 	} `json:"data"`
 }
 
-// GetByID returns the manga with the given id.
+// GetByID returns a manga by its ID.
 // If the manga is not found, it returns nil.
 func GetByID(id int) (*Manga, error) {
 	if manga := idCacher.Get(id); manga.IsPresent() {
@@ -34,10 +37,10 @@ func GetByID(id int) (*Manga, error) {
 	}
 
 	// prepare body
-	log.Infof("Searching anilist for manga with id: %d", id)
-	body := map[string]interface{}{
+	log.Infof("Getting manga with id %d from Anilist", id)
+	body := map[string]any{
 		"query": searchByIDQuery,
-		"variables": map[string]interface{}{
+		"variables": map[string]any{
 			"id": id,
 		},
 	}
@@ -80,8 +83,11 @@ func GetByID(id int) (*Manga, error) {
 	}
 
 	manga := response.Data.Media
-	log.Infof("Got response from Anilist, found manga with id %d", manga.ID)
-	_ = idCacher.Set(id, manga)
+	if manga == nil {
+		return nil, fmt.Errorf("manga with id %d not found", id)
+	}
+
+	_ = idCacher.Set(manga.ID, manga)
 	return manga, nil
 }
 
@@ -107,61 +113,89 @@ func SearchByName(name string) ([]*Manga, error) {
 		return mangas, nil
 	}
 
-	// prepare body
-	log.Infof("Searching anilist for manga %s", name)
-	body := map[string]any{
-		"query": searchByNameQuery,
-		"variables": map[string]any{
-			"query": name,
-		},
+	// Try variations of the name
+	variations := []string{name}
+
+	// Add name without special characters
+	cleanName := strings.Map(func(r rune) rune {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) || unicode.IsSpace(r) {
+			return r
+		}
+		return -1
+	}, name)
+	if cleanName != name {
+		variations = append(variations, cleanName)
 	}
 
-	// parse body to json
-	jsonBody, err := json.Marshal(body)
-	if err != nil {
-		log.Error(err)
-		return nil, err
+	// Add name without volume/chapter numbers
+	re := regexp.MustCompile(`(?i)\s*(vol(\.|ume)?|ch(\.|apter)?)\s*\d+.*$`)
+	strippedName := re.ReplaceAllString(name, "")
+	if strippedName != name {
+		variations = append(variations, strippedName)
 	}
 
-	// send request
-	log.Info("Sending request to Anilist")
-	req, err := http.NewRequest(http.MethodPost, "https://graphql.anilist.co", bytes.NewBuffer(jsonBody))
-	if err != nil {
-		log.Error(err)
-		return nil, err
+	// Try each variation
+	for _, variant := range variations {
+		// prepare body
+		log.Infof("Searching anilist for manga %s", variant)
+		body := map[string]any{
+			"query": searchByNameQuery,
+			"variables": map[string]any{
+				"query": variant,
+			},
+		}
+
+		// parse body to json
+		jsonBody, err := json.Marshal(body)
+		if err != nil {
+			log.Error(err)
+			continue
+		}
+
+		// send request
+		log.Info("Sending request to Anilist")
+		req, err := http.NewRequest(http.MethodPost, "https://graphql.anilist.co", bytes.NewBuffer(jsonBody))
+		if err != nil {
+			log.Error(err)
+			continue
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := network.Client.Do(req)
+
+		if err != nil {
+			log.Error(err)
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			log.Error("Anilist returned status code " + strconv.Itoa(resp.StatusCode))
+			continue
+		}
+
+		// decode response
+		var response searchByNameResponse
+
+		if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+			log.Error(err)
+			continue
+		}
+
+		mangas := response.Data.Page.Media
+		if len(mangas) > 0 {
+			log.Infof("Got response from Anilist, found %d results", len(mangas))
+			ids := make([]int, len(mangas))
+			for i, manga := range mangas {
+				ids[i] = manga.ID
+				_ = idCacher.Set(manga.ID, manga)
+			}
+			_ = searchCacher.Set(name, ids)
+			return mangas, nil
+		}
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := network.Client.Do(req)
-
-	if err != nil {
-		log.Error(err)
-		_ = failCacher.Set(name, true)
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		log.Error("Anilist returned status code " + strconv.Itoa(resp.StatusCode))
-		_ = failCacher.Set(name, true)
-		return nil, fmt.Errorf("invalid response code %d", resp.StatusCode)
-	}
-
-	// decode response
-	var response searchByNameResponse
-
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		log.Error(err)
-		return nil, err
-	}
-
-	mangas := response.Data.Page.Media
-	log.Infof("Got response from Anilist, found %d results", len(mangas))
-	ids := make([]int, len(mangas))
-	for i, manga := range mangas {
-		ids[i] = manga.ID
-		_ = idCacher.Set(manga.ID, manga)
-	}
-	_ = searchCacher.Set(name, ids)
-	return mangas, nil
+	// If all variations failed
+	_ = failCacher.Set(name, true)
+	return nil, fmt.Errorf("no results found for any variation of %s", name)
 }

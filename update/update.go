@@ -14,6 +14,18 @@ import (
 	"strings"
 )
 
+// localSource implements source.Source for local files
+type localSource struct {
+	name string
+	id   string
+}
+
+func (l *localSource) Name() string { return l.name }
+func (l *localSource) ID() string   { return l.id }
+func (l *localSource) Search(query string) ([]*source.Manga, error) { return nil, nil }
+func (l *localSource) ChaptersOf(manga *source.Manga) ([]*source.Chapter, error) { return nil, nil }
+func (l *localSource) PagesOf(chapter *source.Chapter) ([]*source.Page, error) { return nil, nil }
+
 func Metadata(mangaPath string) error {
 	log.Infof("extracting series name from %s", mangaPath)
 	name, err := GetName(mangaPath)
@@ -26,12 +38,19 @@ func Metadata(mangaPath string) error {
 	log.Infof("finding %s on anilist", name)
 	manga := &source.Manga{
 		Name: name,
+		ID:   name, // Use name as ID since we don't have a real source ID
+		Source: &localSource{
+			name: "local",
+			id:   "local",
+		},
 	}
 
 	// will set new metadata from anilist
-	err = manga.PopulateMetadata(func(string) {})
+	err = manga.PopulateMetadata(func(s string) {
+		log.Info(s)
+	})
 	if err != nil {
-		log.Error()
+		log.Error(err)
 		return err
 	}
 
@@ -68,7 +87,10 @@ func Metadata(mangaPath string) error {
 
 	// okay, we're ready to regenerate series.json and ComicInfo.xml now
 	seriesJSON := manga.SeriesJSON()
-	buf, err := json.Marshal(seriesJSON)
+	buf := &bytes.Buffer{}
+	encoder := json.NewEncoder(buf)
+	encoder.SetIndent("", "  ")
+	err = encoder.Encode(seriesJSON)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -76,13 +98,13 @@ func Metadata(mangaPath string) error {
 
 	// update series.json
 	log.Info("updating series json")
-	err = filesystem.Api().WriteFile(filepath.Join(mangaPath, "series.json"), buf, os.ModePerm)
+	err = filesystem.Api().WriteFile(filepath.Join(mangaPath, "series.json"), buf.Bytes(), os.ModePerm)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
 
-	log.Info("downloading new cover")
+	log.Infof("downloading new cover")
 	// remove old cover(s).
 	// even though DownloadCover() will overwrite previous one
 	// there may be a sitation when new cover has a different extension

@@ -32,7 +32,67 @@ func SetRelation(name string, to *Manga) error {
 // It will levenshtein compare the given name with all the manga names in the cache.
 func FindClosest(name string) (*Manga, error) {
 	name = normalizedName(name)
-	return findClosest(name, name, 0, 3)
+	
+	// Try exact match first
+	mangas, err := SearchByName(name)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	// Try to find an exact match
+	for _, manga := range mangas {
+		if normalizedName(manga.Name()) == name {
+			log.Info("Found exact match: " + manga.Name())
+			_ = relationCacher.Set(name, manga.ID)
+			_ = idCacher.Set(manga.ID, manga)
+			return manga, nil
+		}
+	}
+
+	// Try alternative titles
+	for _, manga := range mangas {
+		for _, title := range manga.Synonyms {
+			if normalizedName(title) == name {
+				log.Info("Found match in alternative titles: " + manga.Name())
+				_ = relationCacher.Set(name, manga.ID)
+				_ = idCacher.Set(manga.ID, manga)
+				return manga, nil
+			}
+		}
+	}
+
+	// Try fuzzy match
+	if len(mangas) > 0 {
+		closest := lo.MinBy(mangas, func(a, b *Manga) bool {
+			return levenshtein.Distance(
+				name,
+				normalizedName(a.Name()),
+			) < levenshtein.Distance(
+				name,
+				normalizedName(b.Name()),
+			)
+		})
+
+		log.Info("Found closest match: " + closest.Name())
+		_ = relationCacher.Set(name, closest.ID)
+		_ = idCacher.Set(closest.ID, closest)
+		return closest, nil
+	}
+
+	// Try with a simpler search
+	words := strings.Split(name, " ")
+	if len(words) > 1 {
+		// Try with just the first two words
+		simpleName := strings.Join(words[:util.Min(len(words), 2)], " ")
+		log.Infof(`No results found for "%s", trying "%s"`, name, simpleName)
+		return FindClosest(simpleName)
+	}
+
+	err = fmt.Errorf("no results found on Anilist for manga %s", name)
+	log.Error(err)
+	_ = relationCacher.Set(name, -1)
+	return nil, err
 }
 
 // findClosest returns the closest manga to the given name.

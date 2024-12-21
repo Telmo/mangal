@@ -414,6 +414,11 @@ panic, fatal, error, warn, info, debug, trace`,
 		true,
 		"Check for a new version of the CLI occasionally",
 	},
+	{
+		key.DatabasePath,
+		"",
+		"Path to the SQLite database file. If not set, defaults to metadata.db in the config directory",
+	},
 }
 
 func init() {

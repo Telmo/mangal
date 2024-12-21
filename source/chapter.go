@@ -12,6 +12,7 @@ import (
 	"github.com/metafates/mangal/constant"
 	"github.com/metafates/mangal/filesystem"
 	"github.com/metafates/mangal/key"
+	"github.com/metafates/mangal/model"
 	"github.com/metafates/mangal/style"
 	"github.com/metafates/mangal/util"
 	"github.com/samber/mo"
@@ -37,6 +38,55 @@ type Chapter struct {
 
 	isDownloaded mo.Option[bool]
 	size         uint64
+}
+
+func (c *Chapter) ToModel() *model.Chapter {
+	pages := make([]*model.Page, len(c.Pages))
+	for i, p := range c.Pages {
+		pages[i] = p.ToModel()
+	}
+
+	return &model.Chapter{
+		Name:    c.Name,
+		URL:     c.URL,
+		Index:   c.Index,
+		ID:      c.ID,
+		Volume:  c.Volume,
+		Pages:   pages,
+	}
+}
+
+func ChapterFromModel(modelChapter *model.Chapter) *Chapter {
+	pages := make([]*Page, len(modelChapter.Pages))
+	for i, p := range modelChapter.Pages {
+		pages[i] = PageFromModel(p)
+	}
+
+	return &Chapter{
+		Name:    modelChapter.Name,
+		URL:     modelChapter.URL,
+		Index:   modelChapter.Index,
+		ID:      modelChapter.ID,
+		Volume:  modelChapter.Volume,
+		Pages:   pages,
+	}
+}
+
+func NewChapter(manga *Manga, modelChapter *model.Chapter) *Chapter {
+	pages := make([]*Page, len(modelChapter.Pages))
+	for i, p := range modelChapter.Pages {
+		pages[i] = PageFromModel(p)
+	}
+
+	return &Chapter{
+		Name:    modelChapter.Name,
+		URL:     modelChapter.URL,
+		Index:   modelChapter.Index,
+		ID:      modelChapter.ID,
+		Volume:  modelChapter.Volume,
+		Manga:   manga,
+		Pages:   pages,
+	}
 }
 
 func (c *Chapter) String() string {

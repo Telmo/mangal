@@ -1,22 +1,23 @@
 package source
 
 import (
+	"encoding/json"
 	"fmt"
-	"github.com/metafates/mangal/anilist"
-	"github.com/metafates/mangal/filesystem"
-	"github.com/metafates/mangal/key"
-	"github.com/metafates/mangal/log"
-	"github.com/metafates/mangal/util"
-	"github.com/metafates/mangal/where"
-	"github.com/samber/lo"
-	"github.com/samber/mo"
-	"github.com/spf13/viper"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
+
+	"github.com/metafates/mangal/anilist"
+	"github.com/metafates/mangal/database"
+	"github.com/metafates/mangal/filesystem"
+	"github.com/metafates/mangal/key"
+	"github.com/metafates/mangal/log"
+	"github.com/metafates/mangal/model"
+	"github.com/metafates/mangal/util"
+	"github.com/metafates/mangal/where"
+	"github.com/samber/mo"
+	"github.com/spf13/viper"
 )
 
 type date struct {
@@ -27,69 +28,48 @@ type date struct {
 
 // Manga is a manga from a source.
 type Manga struct {
-	// Name of the manga
+	// Name of the manga.
 	Name string `json:"name" jsonschema:"description=Name of the manga"`
-	// URL of the manga
-	URL string `json:"url" jsonschema:"description=URL of the manga"`
-	// Index of the manga in the source.
-	Index uint16 `json:"index" jsonschema:"description=Index of the manga in the source"`
+	// URL to manga's page.
+	URL string `json:"url" jsonschema:"description=URL to manga's page"`
 	// ID of manga in the source.
 	ID string `json:"id" jsonschema:"description=ID of manga in the source"`
+	// Index of the manga in search results
+	Index uint16 `json:"index" jsonschema:"description=Index of the manga in search results"`
 	// Chapters of the manga
 	Chapters []*Chapter `json:"chapters" jsonschema:"description=Chapters of the manga"`
 	// Source that the manga belongs to.
 	Source Source `json:"-"`
 	// Anilist is the closest anilist match
 	Anilist  mo.Option[*anilist.Manga] `json:"-"`
-	Metadata struct {
-		// Genres of the manga
-		Genres []string `json:"genres" jsonschema:"description=Genres of the manga"`
-		// Summary in the plain text with newlines
-		Summary string `json:"summary" jsonschema:"description=Summary in the plain text with newlines"`
-		// Staff that worked on the manga
-		Staff struct {
-			// Story authors
-			Story []string `json:"story" jsonschema:"description=Story authors"`
-			// Art authors
-			Art []string `json:"art" jsonschema:"description=Art authors"`
-			// Translation group
-			Translation []string `json:"translation" jsonschema:"description=Translation group"`
-			// Lettering group
-			Lettering []string `json:"lettering" jsonschema:"description=Lettering group"`
-		} `json:"staff" jsonschema:"description=Staff that worked on the manga"`
-		// Cover images of the manga
-		Cover struct {
-			// ExtraLarge is the largest cover image. If not available, Large will be used.
-			ExtraLarge string `json:"extraLarge" jsonschema:"description=ExtraLarge is the largest cover image. If not available, Large will be used."`
-			// Large is the second-largest cover image.
-			Large string `json:"large" jsonschema:"description=Large is the second-largest cover image."`
-			// Medium cover image. The smallest one.
-			Medium string `json:"medium" jsonschema:"description=Medium cover image. The smallest one."`
-			// Color average color of the cover image.
-			Color string `json:"color" jsonschema:"description=Color average color of the cover image."`
-		} `json:"cover" jsonschema:"description=Cover images of the manga"`
-		// BannerImage is the banner image of the manga.
-		BannerImage string `json:"bannerImage" jsonschema:"description=BannerImage is the banner image of the manga."`
-		// Tags of the manga
-		Tags []string `json:"tags" jsonschema:"description=Tags of the manga"`
-		// Characters of the manga
-		Characters []string `json:"characters" jsonschema:"description=Characters of the manga"`
-		// Status of the manga
-		Status string `json:"status" jsonschema:"enum=FINISHED,enum=RELEASING,enum=NOT_YET_RELEASED,enum=CANCELLED,enum=HIATUS"`
-		// StartDate is the date when the manga started.
-		StartDate date `json:"startDate" jsonschema:"description=StartDate is the date when the manga started."`
-		// EndDate is the date when the manga ended.
-		EndDate date `json:"endDate" jsonschema:"description=EndDate is the date when the manga ended."`
-		// Synonyms other names of the manga.
-		Synonyms []string `json:"synonyms" jsonschema:"description=Synonyms other names of the manga."`
-		// Chapters is the amount of chapters the manga will have when completed.
-		Chapters int `json:"chapters" jsonschema:"description=The amount of chapters the manga will have when completed."`
-		// URLs external URLs of the manga.
-		URLs []string `json:"urls" jsonschema:"description=External URLs of the manga."`
-	} `json:"metadata"`
+	Metadata model.MangaMetadata `json:"metadata"`
+	
 	cachedTempPath  string
 	populated       bool
 	coverDownloaded bool
+}
+
+func (m *Manga) ToModel() *model.Manga {
+	return &model.Manga{
+		ID:          m.ID,
+		Title:       m.Name,
+		URL:         m.URL,
+		Description: m.Metadata.Summary,
+		SourceID:    m.Source.ID(),
+		SourceName:  m.Source.Name(),
+		Metadata:    m.Metadata,
+	}
+}
+
+func FromModel(modelManga *model.Manga, src Source) *Manga {
+	return &Manga{
+		ID:       modelManga.ID,
+		Name:     modelManga.Title,
+		URL:      modelManga.URL,
+		Source:   src,
+		Metadata: modelManga.Metadata,
+		Chapters: make([]*Chapter, 0),
+	}
 }
 
 func (m *Manga) String() string {
@@ -227,104 +207,160 @@ func (m *Manga) PopulateMetadata(progress func(string)) error {
 	if m.populated {
 		return nil
 	}
-	m.populated = true
 
-	progress("Fetching metadata from anilist")
-	log.Infof("Populating metadata for %s", m.Name)
+	if progress != nil {
+		progress("Getting metadata...")
+	}
+
+	// Try to bind with Anilist first
 	if err := m.BindWithAnilist(); err != nil {
-		progress("Failed to fetch metadata")
+		log.Warn("Failed to bind with Anilist:", err)
+	} else if m.Anilist.IsPresent() {
+		aniManga := m.Anilist.MustGet()
+		m.Metadata.Summary = aniManga.Description
+		m.Metadata.Genres = aniManga.Genres
+		m.Metadata.Status = aniManga.Status
+		m.Metadata.StartDate = model.Date(aniManga.StartDate)
+		m.Metadata.EndDate = model.Date(aniManga.EndDate)
+		m.Metadata.Cover.ExtraLarge = aniManga.CoverImage.ExtraLarge
+		m.Metadata.Cover.Large = aniManga.CoverImage.Large
+		m.Metadata.Cover.Medium = aniManga.CoverImage.Medium
+		m.Metadata.Cover.Color = aniManga.CoverImage.Color
+		m.Metadata.BannerImage = aniManga.BannerImage
+		m.Metadata.Chapters = aniManga.Chapters
+		m.Metadata.Synonyms = aniManga.Synonyms
+
+		// Extract staff information
+		for _, edge := range aniManga.Staff.Edges {
+			switch edge.Role {
+			case "Story":
+				m.Metadata.Staff.Story = append(m.Metadata.Staff.Story, edge.Node.Name.Full)
+			case "Art":
+				m.Metadata.Staff.Art = append(m.Metadata.Staff.Art, edge.Node.Name.Full)
+			}
+		}
+
+		// Extract character names
+		for _, node := range aniManga.Characters.Nodes {
+			m.Metadata.Characters = append(m.Metadata.Characters, node.Name.Full)
+		}
+
+		// Extract tags
+		for _, tag := range aniManga.Tags {
+			m.Metadata.Tags = append(m.Metadata.Tags, tag.Name)
+		}
+
+		m.populated = true
+
+		// Save to database
+		db, err := database.GetDB()
+		if err != nil {
+			log.Error("Failed to get database:", err)
+			return err
+		}
+
+		modelManga := &model.Manga{
+			ID:          m.ID,
+			Title:       m.Name,
+			URL:         m.URL,
+			Description: m.Metadata.Summary,
+			SourceID:    m.Source.ID(),
+			SourceName:  m.Source.Name(),
+			Metadata:    m.Metadata,
+		}
+
+		if err := database.SaveMangaMetadata(db, modelManga); err != nil {
+			log.Error("Failed to save metadata to database:", err)
+			return err
+		}
+
+		// Save to JSON file as backup
+		return m.SaveMetadata()
+	}
+
+	// Try to get metadata from database
+	db, err := database.GetDB()
+	if err != nil {
 		return err
 	}
 
-	manga, ok := m.Anilist.Get()
-	if !ok || manga == nil {
-		return fmt.Errorf("manga '%s' not found on Anilist", m.Name)
+	modelManga := &model.Manga{
+		ID:          m.ID,
+		Title:       m.Name,
+		URL:         m.URL,
+		Description: m.Metadata.Summary,
+		SourceID:    m.Source.ID(),
+		SourceName:  m.Source.Name(),
+		Metadata:    m.Metadata,
 	}
 
-	m.Metadata.Genres = manga.Genres
-	// replace <br> with newlines and remove other html tags
-	m.Metadata.Summary = regexp.
-		MustCompile("<.*?>").
-		ReplaceAllString(
-			strings.
-				ReplaceAll(
-					manga.Description,
-					"<br>",
-					"\n",
-				),
-			"",
-		)
-
-	var characters = make([]string, len(manga.Characters.Nodes))
-	for i, character := range manga.Characters.Nodes {
-		characters[i] = character.Name.Full
+	metadata, err := database.GetMangaMetadata(db, m.ID)
+	if err == nil && metadata != nil {
+		modelManga = metadata
+		m.Name = metadata.Title
+		m.URL = metadata.URL
+		m.Metadata = metadata.Metadata
+		m.populated = true
+		return nil
 	}
-	m.Metadata.Characters = characters
 
-	var tags = make([]string, 0)
-	for _, tag := range manga.Tags {
-		if tag.Rank >= viper.GetInt(key.MetadataComicInfoXMLTagRelevanceThreshold) {
-			tags = append(tags, tag.Name)
+	// Fall back to JSON file if database lookup fails
+	jsonPath := filepath.Join(where.Config(), "metadata", m.ID+".json")
+	data, err := os.ReadFile(jsonPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
 		}
-	}
-	m.Metadata.Tags = tags
-
-	m.Metadata.Cover.ExtraLarge = manga.CoverImage.ExtraLarge
-	m.Metadata.Cover.Large = manga.CoverImage.Large
-	m.Metadata.Cover.Medium = manga.CoverImage.Medium
-	m.Metadata.Cover.Color = manga.CoverImage.Color
-
-	m.Metadata.BannerImage = manga.BannerImage
-
-	m.Metadata.StartDate = date(manga.StartDate)
-	m.Metadata.EndDate = date(manga.EndDate)
-
-	m.Metadata.Status = strings.ReplaceAll(manga.Status, "_", " ")
-	m.Metadata.Synonyms = manga.Synonyms
-
-	m.Metadata.Staff.Story = make([]string, 0)
-	m.Metadata.Staff.Art = make([]string, 0)
-	m.Metadata.Staff.Translation = make([]string, 0)
-	m.Metadata.Staff.Lettering = make([]string, 0)
-
-	m.Metadata.Chapters = manga.Chapters
-
-	for _, staff := range manga.Staff.Edges {
-		role := strings.ToLower(staff.Role)
-		switch {
-		case strings.Contains(role, "story"):
-			m.Metadata.Staff.Story = append(m.Metadata.Staff.Story, staff.Node.Name.Full)
-		case strings.Contains(role, "art"):
-			m.Metadata.Staff.Art = append(m.Metadata.Staff.Art, staff.Node.Name.Full)
-		case strings.Contains(role, "translator"):
-			m.Metadata.Staff.Translation = append(m.Metadata.Staff.Translation, staff.Node.Name.Full)
-		case strings.Contains(role, "lettering"):
-			m.Metadata.Staff.Lettering = append(m.Metadata.Staff.Lettering, staff.Node.Name.Full)
-		}
+		return fmt.Errorf("failed to read metadata file: %w", err)
 	}
 
-	// Anilist & Myanimelist + external
-	urls := make([]string, 2+len(manga.External))
-	urls[0] = manga.SiteURL
-	for i, e := range manga.External {
-		urls[i+1] = e.URL
+	if err := json.Unmarshal(data, modelManga); err != nil {
+		return fmt.Errorf("failed to unmarshal metadata: %w", err)
 	}
 
-	urls = lo.Filter(urls, func(url string, _ int) bool {
-		return url != ""
-	})
-
-	urls = append(urls, fmt.Sprintf("https://myanimelist.net/manga/%d", manga.IDMal))
-	m.Metadata.URLs = urls
+	m.Name = modelManga.Title
+	m.URL = modelManga.URL
+	m.Metadata = modelManga.Metadata
+	m.populated = true
 
 	return nil
 }
 
-func (m *Manga) SeriesJSON() *SeriesJSON {
+func (m *Manga) SaveMetadata() error {
+	modelManga := &model.Manga{
+		ID:          m.ID,
+		Title:       m.Name,
+		URL:         m.URL,
+		Description: m.Metadata.Summary,
+		SourceID:    m.Source.ID(),
+		SourceName:  m.Source.Name(),
+		Metadata:    m.Metadata,
+	}
+
+	// Save to JSON file for backward compatibility
+	metadataDir := filepath.Join(where.Config(), "metadata")
+	if err := os.MkdirAll(metadataDir, 0755); err != nil {
+		return fmt.Errorf("failed to create metadata directory: %w", err)
+	}
+
+	jsonPath := filepath.Join(metadataDir, m.ID+".json")
+	data, err := json.MarshalIndent(modelManga, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	if err := os.WriteFile(jsonPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write metadata file: %w", err)
+	}
+
+	return nil
+}
+
+func (m *Manga) SeriesJSON() *model.SeriesJSON {
 	var status string
 	switch m.Metadata.Status {
 	case "FINISHED":
-		status = "Ended"
+		status = "Completed"
 	case "RELEASING":
 		status = "Continuing"
 	default:
@@ -336,18 +372,27 @@ func (m *Manga) SeriesJSON() *SeriesJSON {
 		publisher = m.Metadata.Staff.Story[0]
 	}
 
-	seriesJSON := &SeriesJSON{}
+	seriesJSON := &model.SeriesJSON{}
 	seriesJSON.Metadata.Type = "comicSeries"
 	seriesJSON.Metadata.Name = m.Name
 	seriesJSON.Metadata.DescriptionFormatted = m.Metadata.Summary
 	seriesJSON.Metadata.DescriptionText = m.Metadata.Summary
+	seriesJSON.Metadata.Publisher = publisher
 	seriesJSON.Metadata.Status = status
 	seriesJSON.Metadata.Year = m.Metadata.StartDate.Year
+	seriesJSON.Metadata.TotalChapters = len(m.Chapters)
+	seriesJSON.Metadata.TotalIssues = len(m.Chapters)
+	seriesJSON.Metadata.BookType = "manga"
 	seriesJSON.Metadata.ComicImage = m.Metadata.Cover.ExtraLarge
-	seriesJSON.Metadata.Publisher = publisher
-	seriesJSON.Metadata.BookType = "Print"
-	seriesJSON.Metadata.TotalIssues = m.Metadata.Chapters
-	seriesJSON.Metadata.PublicationRun = fmt.Sprintf("%d %d - %d %d", m.Metadata.StartDate.Month, m.Metadata.StartDate.Year, m.Metadata.EndDate.Month, m.Metadata.EndDate.Year)
+	seriesJSON.Metadata.ComicID = 0
+
+	// Format publication run as "MM YYYY - MM YYYY"
+	start := fmt.Sprintf("%d %d", m.Metadata.StartDate.Month, m.Metadata.StartDate.Year)
+	end := "0 0"
+	if m.Metadata.EndDate.Year > 0 {
+		end = fmt.Sprintf("%d %d", m.Metadata.EndDate.Month, m.Metadata.EndDate.Year)
+	}
+	seriesJSON.Metadata.PublicationRun = fmt.Sprintf("%s - %s", start, end)
 
 	return seriesJSON
 }

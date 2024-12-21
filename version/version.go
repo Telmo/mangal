@@ -12,6 +12,9 @@ import (
 	"time"
 )
 
+// Version is the current version of mangal
+const Version = "4.0.7"
+
 var versionCacher = gache.New[string](&gache.Options{
 	Path:       filepath.Join(where.Cache(), "version.json"),
 	Lifetime:   time.Hour * 24 * 2,

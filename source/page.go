@@ -13,6 +13,7 @@ import (
 
 	"github.com/metafates/mangal/constant"
 	"github.com/metafates/mangal/log"
+	"github.com/metafates/mangal/model"
 	"github.com/metafates/mangal/network"
 	"github.com/metafates/mangal/util"
 )
@@ -31,6 +32,36 @@ type Page struct {
 	Contents *bytes.Buffer `json:"-"`
 	// Chapter that the page belongs to.
 	Chapter *Chapter `json:"-"`
+}
+
+func (p *Page) ToModel() *model.Page {
+	return &model.Page{
+		URL:       p.URL,
+		Index:     p.Index,
+		Extension: p.Extension,
+		Size:      p.Size,
+	}
+}
+
+func PageFromModel(modelPage *model.Page) *Page {
+	return &Page{
+		URL:       modelPage.URL,
+		Index:     modelPage.Index,
+		Extension: modelPage.Extension,
+		Size:      modelPage.Size,
+		Contents:  &bytes.Buffer{},
+	}
+}
+
+func NewPage(chapter *Chapter, modelPage *model.Page) *Page {
+	return &Page{
+		URL:       modelPage.URL,
+		Index:     modelPage.Index,
+		Extension: modelPage.Extension,
+		Size:      modelPage.Size,
+		Contents:  &bytes.Buffer{},
+		Chapter:   chapter,
+	}
 }
 
 func (p *Page) request() (*http.Request, error) {

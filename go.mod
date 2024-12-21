@@ -15,6 +15,7 @@ require (
 	github.com/ivanpirog/coloredcobra v1.0.1
 	github.com/ka-weihe/fast-levenshtein v0.0.0-20201227151214-4c99ee36a1ba
 	github.com/lithammer/fuzzysearch v1.1.5
+	github.com/mattn/go-sqlite3 v1.14.24
 	github.com/metafates/gache v0.0.2
 	github.com/metafates/mangal-lua-libs v0.5.0
 	github.com/muesli/reflow v0.3.0

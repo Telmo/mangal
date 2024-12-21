@@ -1,6 +1,7 @@
 package downloader
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -70,11 +71,14 @@ func Download(chapter *source.Chapter, progress func(string)) (string, error) {
 			path = filepath.Join(path, "series.json")
 			progress("Generating series.json")
 			seriesJSON := chapter.Manga.SeriesJSON()
-			buf, err := json.Marshal(seriesJSON)
+			buf := &bytes.Buffer{}
+			encoder := json.NewEncoder(buf)
+			encoder.SetIndent("", "  ")
+			err = encoder.Encode(seriesJSON)
 			if err != nil {
 				log.Warn(err)
 			} else {
-				err = filesystem.Api().WriteFile(path, buf, os.ModePerm)
+				err = filesystem.Api().WriteFile(path, buf.Bytes(), os.ModePerm)
 				if err != nil {
 					log.Warn(err)
 				}

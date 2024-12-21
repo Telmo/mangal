@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com), and this project adheres to
 [Semantic Versioning](https://semver.org).
 
+## 4.0.7
+
+### Added
+- SQLite database support for storing manga metadata
+- Configurable database location via:
+  - Environment variable: `MANGAL_DATABASE_PATH`
+  - Config file: `database.path`
+  - Default location: `$XDG_DATA_HOME/mangal/mangal.db` or `~/.local/share/mangal/mangal.db`
+
+### Changed
+- Improved metadata handling with both JSON and SQLite storage
+- Enhanced error handling and logging for database operations
+
 ## 4.0.6
 
 - Update dependencies

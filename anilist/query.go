@@ -68,7 +68,7 @@ externalLinks {
 var searchByNameQuery = fmt.Sprintf(`
 query ($query: String) {
 	Page (page: 1, perPage: 30) {
-		media (search: $query, type: MANGA) {
+		media (search: $query, type: MANGA, sort: [SEARCH_MATCH, POPULARITY_DESC]) {
 			%s
 		}
 	}

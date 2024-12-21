@@ -98,3 +98,16 @@ func Temp() string {
 	tempDir := filepath.Join(os.TempDir(), constant.Mangal)
 	return mkdir(tempDir)
 }
+
+// Database path
+// Will create the directory if it doesn't exist
+func Database() string {
+	path := viper.GetString(key.DatabasePath)
+	if path == "" {
+		path = filepath.Join(Config(), "mangal-ng.db")
+	}
+
+	// Ensure the parent directory exists
+	mkdir(filepath.Dir(path))
+	return path
+}
