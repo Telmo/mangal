@@ -6,6 +6,9 @@ mangadex_search
 # Rule files
 .*rules
 
+# Ignore the debug directory
+debug/
+
 ######
 # Go #
 ######

@@ -105,14 +105,31 @@ func (c *Chapter) DownloadPages(temp bool, progress func(string)) (err error) {
 		)
 	}
 
+	// For CBZ format, we'll download to a temporary directory first
+	isCBZ := viper.GetString(key.FormatsUse) == "cbz"
+	var tempDir string
+	if isCBZ {
+		tempDir = filepath.Join(os.TempDir(), fmt.Sprintf("mangal-%d", time.Now().UnixNano()))
+		err = filesystem.Api().MkdirAll(tempDir, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("failed to create temporary directory: %w", err)
+		}
+		defer filesystem.Api().RemoveAll(tempDir)
+	}
+
 	path, err := c.Path(temp)
 	if err != nil {
 		return fmt.Errorf("failed to get chapter path: %w", err)
 	}
 
-	err = filesystem.Api().MkdirAll(path, os.ModePerm)
-	if err != nil {
-		return fmt.Errorf("failed to create chapter directory: %w", err)
+	// If we're creating a CBZ, download to temp directory
+	if isCBZ {
+		path = tempDir
+	} else {
+		err = filesystem.Api().MkdirAll(path, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("failed to create chapter directory: %w", err)
+		}
 	}
 
 	// Use errgroup for better error handling in goroutines
