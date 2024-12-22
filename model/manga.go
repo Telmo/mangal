@@ -1,5 +1,7 @@
 package model
 
+import "strings"
+
 // Date represents a date with year, month and day
 type Date struct {
 	Year  int `json:"year"`
@@ -69,6 +71,8 @@ type MangaMetadata struct {
 	IsLicensed bool `json:"isLicensed"`
 	// UpdatedAt is the timestamp of when the manga was last updated
 	UpdatedAt int `json:"updatedAt"`
+	// PublicationRun is the publication run of the manga (e.g. "1 2023 - 4 2024")
+	PublicationRun string `json:"publicationRun"`
 }
 
 // SeriesJSON represents metadata in series.json format
@@ -114,6 +118,51 @@ type SeriesJSON struct {
 		Synonyms      []string `json:"synonyms"`
 		Format        string   `json:"format"`
 	} `json:"metadata"`
+}
+
+// SeriesJSONToManga converts a SeriesJSON to a Manga
+func SeriesJSONToManga(seriesJSON *SeriesJSON) *Manga {
+	// Convert format to lowercase and handle empty case
+	format := strings.ToLower(seriesJSON.Metadata.Format)
+	if format == "" {
+		format = "manga"
+	}
+
+	return &Manga{
+		Title:       seriesJSON.Metadata.Name,
+		Description: seriesJSON.Metadata.DescriptionFormatted,
+		Metadata: MangaMetadata{
+			Status: seriesJSON.Metadata.Status,
+			StartDate: Date{
+				Year: seriesJSON.Metadata.Year,
+			},
+			Summary:      seriesJSON.Metadata.DescriptionText,
+			Genres:      seriesJSON.Metadata.Genres,
+			Tags:        seriesJSON.Metadata.Tags,
+			Characters:  seriesJSON.Metadata.Characters,
+			Staff:       seriesJSON.Metadata.Staff,
+			Volumes:     seriesJSON.Metadata.Volumes,
+			Chapters:    seriesJSON.Metadata.Chapters,
+			AverageScore: seriesJSON.Metadata.AverageScore,
+			Popularity:   seriesJSON.Metadata.Popularity,
+			MeanScore:    seriesJSON.Metadata.MeanScore,
+			IsLicensed:   seriesJSON.Metadata.IsLicensed,
+			BannerImage:  seriesJSON.Metadata.BannerImage,
+			URLs:         seriesJSON.Metadata.URLs,
+			Cover: struct {
+				ExtraLarge string `json:"extraLarge"`
+				Large      string `json:"large"`
+				Medium     string `json:"medium"`
+				Color      string `json:"color"`
+			}{
+				ExtraLarge: seriesJSON.Metadata.ComicImage,
+				Large:      seriesJSON.Metadata.ComicImage,
+				Medium:     seriesJSON.Metadata.ComicImage,
+			},
+			PublicationRun: seriesJSON.Metadata.PublicationRun,
+			Format:         format,
+		},
+	}
 }
 
 // Manga represents a manga series

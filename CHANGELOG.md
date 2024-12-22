@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com), and this project adheres to
 [Semantic Versioning](https://semver.org).
 
+## 4.0.9
+
+### Added
+- Migrated from SQLite to PostgreSQL for improved scalability and concurrent access
+- Added database migrations system using golang-migrate
+- Added comprehensive database schema with proper constraints and relationships
+- Added support for storing manga URLs, genres, tags, and characters
+- Added input sanitization utilities to prevent SQL injection and XSS attacks
+- Added password obfuscation in database connection logs
+
+### Security
+- Implemented input sanitization for all database operations
+- Added protection against SQL injection attacks
+- Added protection against XSS attacks
+- Obfuscated sensitive information in logs
+- Added URL validation and sanitization
+
+### Fixed
+- Fixed manga format handling in database to properly use enum values ('manga', 'novel', 'one_shot')
+- Fixed cover handling in database to properly manage per-series cover images
+- Fixed publication run formatting in database queries
+- Improved URL handling to ensure proper population in database
+
+### Changed
+- Enhanced database operations to better handle manga metadata
+- Improved data consistency between series.json and database records
+- Database configuration now uses PostgreSQL connection string instead of SQLite path
+- Separated database code into production (/db) and testing (/database) packages
+
 ## 4.0.8
 
 ### Added

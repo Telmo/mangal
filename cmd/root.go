@@ -2,9 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"os"
+	"strings"
+
 	cc "github.com/ivanpirog/coloredcobra"
 	"github.com/metafates/mangal/color"
 	"github.com/metafates/mangal/constant"
+	"github.com/metafates/mangal/config"
+	"github.com/metafates/mangal/db"
 	"github.com/metafates/mangal/converter"
 	"github.com/metafates/mangal/icon"
 	"github.com/metafates/mangal/key"
@@ -18,11 +23,19 @@ import (
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"os"
-	"strings"
 )
 
 func init() {
+	cobra.OnInitialize(initConfig)
+
+	// Set default values for database configuration
+	viper.SetDefault("database.host", "localhost")
+	viper.SetDefault("database.port", 5432)
+	viper.SetDefault("database.user", "mangal")
+	viper.SetDefault("database.password", "mangal")
+	viper.SetDefault("database.name", "mangal")
+	viper.SetDefault("database.sslmode", "disable")
+
 	rootCmd.Flags().BoolP("version", "v", false, "Print version")
 
 	rootCmd.PersistentFlags().StringP("format", "F", "", "output format")
@@ -68,6 +81,21 @@ func init() {
 	go func() {
 		_ = util.Delete(where.Temp())
 	}()
+}
+
+func initConfig() {
+	// Initialize config
+	if err := config.Setup(); err != nil {
+		log.Error("Error setting up config:", err)
+		os.Exit(1)
+	}
+
+	// Initialize database connection
+	_, err := db.GetDB()
+	if err != nil {
+		log.Error("Failed to initialize database:", err)
+		os.Exit(1)
+	}
 }
 
 // rootCmd represents the base command when called without any subcommands

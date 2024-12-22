@@ -125,7 +125,7 @@ func (f *Field) Env() string {
 
 // defaults contains all default values for the config.
 // It must contain all fields defined in the constant package.
-var defaults = [key.DefinedFieldsCount]Field{
+var defaults = [61]Field{
 	{
 		key.DownloaderPath,
 		".",
@@ -424,6 +424,36 @@ panic, fatal, error, warn, info, debug, trace`,
 		"",
 		"Path to the SQLite database file. If not set, defaults to metadata.db in the config directory",
 	},
+	{
+		"database.host",
+		"localhost",
+		"Database host",
+	},
+	{
+		"database.port",
+		5432,
+		"Database port",
+	},
+	{
+		"database.user",
+		"postgres",
+		"Database user",
+	},
+	{
+		"database.password",
+		"postgres",
+		"Database password",
+	},
+	{
+		"database.name",
+		"mangal",
+		"Database name",
+	},
+	{
+		"database.sslmode",
+		"disable",
+		"Database SSL mode",
+	},
 }
 
 func init() {
@@ -439,9 +469,9 @@ func init() {
 		count++
 	}
 
-	if count != key.DefinedFieldsCount {
-		panic(fmt.Sprintf("Expected %d default values, got %d", key.DefinedFieldsCount, count))
+	if count != len(defaults) {
+		panic(fmt.Sprintf("Expected %d default values, got %d", len(defaults), count))
 	}
 }
 
-var Default = make(map[string]Field, key.DefinedFieldsCount)
+var Default = make(map[string]Field, len(defaults))

@@ -99,6 +99,17 @@ For example, `downloader.path` becomes `MANGAL_DOWNLOADER_PATH`.
 | Installer Repo | `MANGAL_INSTALLER_REPO` | `installer.repo` | GitHub repository for updates | `""` |
 | Installer Branch | `MANGAL_INSTALLER_BRANCH` | `installer.branch` | GitHub branch for updates | `""` |
 
+### Database Settings
+
+| Option | Environment Variable | TOML Key | Description | Default |
+|--------|-------------------|-----------|-------------|---------|
+| Host | `MANGAL_DATABASE_HOST` | `database.host` | PostgreSQL server host | `localhost` |
+| Port | `MANGAL_DATABASE_PORT` | `database.port` | PostgreSQL server port | `5432` |
+| User | `MANGAL_DATABASE_USER` | `database.user` | PostgreSQL username | `mangal` |
+| Password | `MANGAL_DATABASE_PASSWORD` | `database.password` | PostgreSQL password | `mangal` |
+| Database | `MANGAL_DATABASE_NAME` | `database.name` | PostgreSQL database name | `mangal` |
+| SSL Mode | `MANGAL_DATABASE_SSLMODE` | `database.sslmode` | PostgreSQL SSL mode (disable, require, verify-ca, verify-full) | `disable` |
+
 ## Example Configuration
 
 Here's an example `mangal.toml` configuration file:
@@ -109,23 +120,46 @@ path = "~/manga"
 chapter_name_template = "Chapter {chapter_number}"
 async = true
 create_manga_dir = true
+create_volume_dir = false
+stop_on_error = false
 download_cover = true
+redownload_existing = false
+read_downloaded = false
+default_sources = ["mangadex", "mangapill", "manganato", "manganelo"]
 
 [formats]
 use = "cbz"
+skip_unsupported_images = false
 
 [metadata]
 fetch_anilist = true
 comic_info_xml = true
+comic_info_xml_add_date = true
+comic_info_xml_alternative_date = false
+comic_info_xml_tag_relevance_threshold = 0.5
+series_json = true
+debug = false
+
+[database]
+host = "localhost"
+port = 5432
+user = "mangal"
+password = "mangal"
+name = "mangal"
+sslmode = "disable"
 
 [reader]
+pdf = ""
+cbz = ""
+zip = ""
+plain = ""
+browser = ""
+folder = ""
 read_in_browser = false
 
 [anilist]
 enable = false
-
-[tui]
-item_spacing = 1
-search_prompt = "Search: "
-show_downloaded_path = true
+id = ""
+secret = ""
+code = ""
 ```

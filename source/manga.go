@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/metafates/mangal/anilist"
-	"github.com/metafates/mangal/database"
+	"github.com/metafates/mangal/db"
 	"github.com/metafates/mangal/filesystem"
 	"github.com/metafates/mangal/key"
 	"github.com/metafates/mangal/log"
@@ -500,7 +500,7 @@ func (m *Manga) PopulateMetadata(progress func(string)) error {
 		}
 
 		// Save to database with transformed metadata
-		db, err := database.GetDB()
+		dbConn, err := db.GetDB()
 		if err != nil {
 			log.Error("Failed to get database:", err)
 			return err
@@ -525,7 +525,7 @@ func (m *Manga) PopulateMetadata(progress func(string)) error {
 			Metadata:    m.Metadata,
 		}
 
-		if err := database.SaveMangaMetadata(db, modelManga); err != nil {
+		if err := db.SaveMangaMetadata(dbConn, modelManga); err != nil {
 			log.Error("Failed to save manga metadata to database:", err)
 			return err
 		}
@@ -534,7 +534,7 @@ func (m *Manga) PopulateMetadata(progress func(string)) error {
 	}
 
 	// Try to get metadata from database
-	db, err := database.GetDB()
+	dbConn, err := db.GetDB()
 	if err != nil {
 		return err
 	}
@@ -549,7 +549,8 @@ func (m *Manga) PopulateMetadata(progress func(string)) error {
 		Metadata:    m.Metadata,
 	}
 
-	metadata, err := database.GetMangaMetadata(db, m.ID)
+	// Try to find existing manga metadata by name
+	metadata, err := db.SearchMangaByName(dbConn, m.Name)
 	if err == nil && metadata != nil {
 		modelManga = metadata
 		m.Name = metadata.Title
@@ -565,7 +566,7 @@ func (m *Manga) PopulateMetadata(progress func(string)) error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Save the default metadata
-			if err := database.SaveMangaMetadata(db, modelManga); err != nil {
+			if err := db.SaveMangaMetadata(dbConn, modelManga); err != nil {
 				log.Error("Failed to save default metadata to database:", err)
 				return err
 			}
